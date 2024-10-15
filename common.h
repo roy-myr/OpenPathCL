@@ -3,10 +3,10 @@
 
 // Define the Node struct
 typedef struct {
-    int index; // Index in the graph matrix
-    int id;    // Node ID
-    double lat; // Latitude of the Node
-    double lon; // Longitude of the Node
+    int index;  // Index in the graph matrix
+    long long id;  // Node ID
+    double lat;  // Latitude of the Node
+    double lon;  // Longitude of the Node
 } Node;
 
 // Construct a linked list that resales a path through the graph
@@ -25,5 +25,8 @@ void appendToNodePath(PathNode** head, const Node data);
 void printNodePath(PathNode* head);
 void freeNodePath(PathNode* head);
 void displayPathOnMap(PathNode* nodePath);
+
+// Functions for the data import
+void getRoadNodes(const double lat1, const double lon1, const double lat2, const double lon2, const double buffer, Node** nodes, int* nodeCount);
 
 #endif //COMMON_H

@@ -12,6 +12,7 @@ add_executable(OpenPathCL_serial
         main_serial.c
         common.c
         common.h)
+target_link_libraries(OpenPathCL_serial winhttp)
 
 # Add the parallel version executable
 add_executable(OpenPathCL_parallel

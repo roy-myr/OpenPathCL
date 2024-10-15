@@ -106,6 +106,19 @@ void dijkstra(double graph[V][V], Node nodes[], int start_id, int destination_id
 }
 
 int main() {
+    // Initialise nodes Array and nodeCount
+    Node* nodes = NULL;
+    int nodeCount = 0;
+
+    // Data import
+    getRoadNodes(53.347781, 8.466496, 53.350880, 8.466570, 0.5, &nodes, &nodeCount);
+
+    printf("Nodes: %d\n", nodeCount);
+    for (int i = 0; i < nodeCount; i++) {
+        printf("Index: %d, ID: %lld, Latitude: %.7f, Longitude: %.7f\n",
+                nodes[i].index, nodes[i].id, nodes[i].lat, nodes[i].lon);
+    }
+
     // Example Graph
     double graph[V][V] = {
         {0, 28.22, 0, 0, 0, 0},
@@ -117,7 +130,7 @@ int main() {
     };
 
     // Define the nodes with their ID and index
-    Node nodes[V] = {
+    Node manual_nodes[V] = {
         {0, 100, 53.347781, 8.466496}, // Node with ID 101 and index 0
         {1, 101, 53.348035, 8.466381},
         {2, 102, 53.348112, 8.466833},
@@ -131,7 +144,7 @@ int main() {
     int target_id = 105;
 
     // Run Dijkstra's algorithm with the source and target IDs
-    dijkstra(graph, nodes, source_id, target_id);
+    dijkstra(graph, manual_nodes, source_id, target_id);
 
     return 0;
 }

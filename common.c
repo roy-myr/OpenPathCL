@@ -2,6 +2,10 @@
 #include <stdlib.h>
 #include "common.h"
 
+#include <windows.h>
+#include <winhttp.h>
+#pragma comment(lib, "winhttp.lib")
+
 // Function to create a PathNode
 PathNode* createPathNode(const Node data) {
     PathNode* newNode = (PathNode*)malloc(sizeof(PathNode));
@@ -133,4 +137,145 @@ void displayPathOnMap(PathNode* nodePath) {
 #endif
 
     system(command); // Execute the command
+}
+
+
+// Function to extract the Nodes from the JSOn Response
+void parseAndStoreNoes(const char* jsonResponse, Node** nodes, int* nodeCount) {
+    const char* pos = jsonResponse;  // Pointer to traverse the response
+    *nodeCount = 0;
+    int capacity = 10;
+
+    // Allocate memory for nodes
+    *nodes = (Node*)malloc(capacity * sizeof(Node));
+
+    // Find each node in the response
+    while ((pos = strstr(pos, "\"type\": \"node\"")) != NULL) {
+        Node node;
+
+        // Find the node ID
+        if (sscanf(strstr(pos, "\"id\":") + 5, "%lld", &node.id) != 1) break;
+
+        // Find the latitude
+        if (sscanf(strstr(pos, "\"lat\":") + 6, "%lf", &node.lat) != 1) break;
+
+        // Find the longitude
+        if (sscanf(strstr(pos, "\"lon\":") + 6, "%lf", &node.lon) != 1) break;
+
+        // Set the index to the current nodeCount
+        node.index = *nodeCount;
+
+        // Add the node to the array
+        (*nodes)[*nodeCount] = node;
+        (*nodeCount)++;
+
+        // Resize the array if necessary
+        if (*nodeCount >= capacity) {
+            capacity *= 2;
+            *nodes = (Node*)realloc(*nodes, capacity * sizeof(Node));
+        }
+
+        pos++;  // Move the pointer forward for the next search
+    }
+}
+
+
+// Function to get road nodes between two coordinates with a buffer
+void getRoadNodes(const double lat1, const double lon1, const double lat2, const double lon2, const double buffer, Node** nodes, int* nodeCount) {
+    // Define the Overpass API host and endpoint
+    LPCWSTR host = L"overpass-api.de";
+    LPCWSTR endpoint = L"/api/interpreter";
+
+    // Initialize WinHTTP session
+    const HINTERNET hSession = WinHttpOpen(L"A WinHTTP Example Program/1.0",
+                                           WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
+                                           WINHTTP_NO_PROXY_NAME,
+                                           WINHTTP_NO_PROXY_BYPASS, 0);
+
+    if (hSession) {
+        // Connect to the Overpass API
+        const HINTERNET hConnect = WinHttpConnect(hSession, host, INTERNET_DEFAULT_HTTP_PORT, 0);
+
+        if (hConnect) {
+            // Create a request for the POST method
+            const HINTERNET hRequest = WinHttpOpenRequest(hConnect, L"POST", endpoint,
+                                                          NULL, WINHTTP_NO_REFERER,
+                                                          WINHTTP_DEFAULT_ACCEPT_TYPES, 0);
+
+            if (hRequest) {
+                // Prepare the Overpass API query
+                char postData[1024];
+                snprintf(postData, sizeof(postData),
+                    "[out:json];"
+                    "way[\"highway\"](around:%f,%f,%f,%f,%f);"
+                    "out body;>;out skel qt;",
+                    buffer, lat1, lon1, lat2, lon2);
+
+                // Set up headers
+                const wchar_t *headers = L"Content-Type: application/x-www-form-urlencoded";
+                DWORD postDataLength = (DWORD)strlen(postData);
+
+                // Send the request
+                BOOL bResults = WinHttpSendRequest(hRequest, headers, -1L, (LPVOID)postData, postDataLength, postDataLength, 0);
+
+                // Receive a response
+                if (bResults) {
+                    bResults = WinHttpReceiveResponse(hRequest, NULL);
+                }
+
+                if (bResults) {
+                    DWORD dwSize = 0;
+                    DWORD dwDownloaded = 0;
+                    LPSTR pszOutBuffer;
+                    BOOL  bContinue = TRUE;
+
+                    // Initial allocation for the response buffer
+                    size_t bufferSize = 1024; // Start with 1 KB
+                    LPSTR responseBuffer = (LPSTR)malloc(bufferSize);
+                    if (!responseBuffer) {
+                        printf("Memory allocation failed\n");
+                        return;
+                    }
+                    responseBuffer[0] = '\0'; // Initialize the buffer
+
+                    // Keep checking for data until there's none left
+                    do {
+                        dwSize = 0;
+                        if (WinHttpQueryDataAvailable(hRequest, &dwSize)) {
+                            // Resize the buffer if necessary
+                            if (dwSize + strlen(responseBuffer) + 1 > bufferSize) {
+                                // Increase the buffer size to fit the new data
+                                bufferSize = (dwSize + strlen(responseBuffer) + 1) * 2; // double the size
+                                responseBuffer = (LPSTR)realloc(responseBuffer, bufferSize);
+                                if (!responseBuffer) {
+                                    printf("Memory reallocation failed\n");
+                                    return;
+                                }
+                            }
+
+                            // Read the data
+                            if (WinHttpReadData(hRequest, (LPVOID)(responseBuffer + strlen(responseBuffer)), dwSize, &dwDownloaded)) {
+                                responseBuffer[strlen(responseBuffer) + dwDownloaded] = '\0'; // Null-terminate the string
+                            }
+                        }
+                    } while (dwSize > 0);
+                    // Print the response before parsing
+                    printf("Full JSON Response: %s\n", responseBuffer);
+
+                    // Parse the response
+                    parseAndStoreNoes(responseBuffer, nodes, nodeCount);
+
+                    // Clean up
+                    free(responseBuffer); // Free the buffer after use
+                }
+
+                // Clean up
+                WinHttpCloseHandle(hRequest);
+            }
+
+            WinHttpCloseHandle(hConnect);
+        }
+
+        WinHttpCloseHandle(hSession);
+    }
 }
