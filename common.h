@@ -9,11 +9,21 @@ typedef struct {
     double lon; // Longitude of the Node
 } Node;
 
+// Construct a linked list that resales a path through the graph
+typedef struct PathNode {
+    Node data;  // Data of the node
+    struct PathNode *next; // Pointer to the next node in the list
+} PathNode;
+
 // OpenPathCL functions that are the same in both the serial and parallel implementations
 void get_data(float latitude, float longitude);
 void display_results();
 
-// Function for printing used path
-void printPath(int prev[], int target_index, Node nodes[]);
+// Functions for the path
+PathNode* createPathNode(const Node data);
+void appendToNodePath(PathNode** head, const Node data);
+void printNodePath(PathNode* head);
+void freeNodePath(PathNode* head);
+Node* retrievePath(int nodeCount, Node nodes[], const int prev[], int destination, int* pathLength);
 
 #endif //COMMON_H

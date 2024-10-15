@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <limits.h>  // For INT_MAX
 #include <stdbool.h> // For boolean data types
+#include <stdlib.h>
+
 #include "common.h"  // Include the common header
 
 #define V 5 // Number of vertices in the graph
@@ -83,10 +85,19 @@ void dijkstra(int graph[V][V], Node nodes[], int start_id, int destination_id) {
 
     // After the loop, check if the target vertex has been reached
     if (dist[destination] != INT_MAX) {
-        printf("Shortest distance from %d to %d is %d\n", start_id, destination_id, dist[destination]);
+        // Retrieve and print the path
+        PathNode* nodePath = NULL; // Initialize the linked list for the nodePath
+        int current = destination;
+
+        // Trace back the path from destination to source
+        while (current != -1) {
+            appendToNodePath(&nodePath, nodes[current]); // Add the node to the linked list
+            current = prev[current]; // Move to the previous node
+        }
+
         printf("Path: ");
-        printPath(prev, destination, nodes);
-        printf("\n");
+        printNodePath(nodePath); // Print the nodePath
+        freeNodePath(nodePath);   // Free the allocated memory for the nodePath
     } else {
         printf("Target %d cannot be reached from source %d\n", destination_id, start_id);
     }
