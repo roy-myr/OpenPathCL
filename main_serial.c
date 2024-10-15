@@ -1,14 +1,9 @@
 #include <stdio.h>
 #include <limits.h>  // For INT_MAX
 #include <stdbool.h> // For boolean data types
+#include "common.h"  // Include the common header
 
 #define V 5 // Number of vertices in the graph
-
-// Struct to represent a node in the graph
-typedef struct {
-    int index; // Index in the graph matrix
-    int id;    // Node ID
-} Node;
 
 // A utility function to find the vertex with the minimum distance value
 int minDistance(int dist[], bool visited_map[]) {
@@ -22,16 +17,6 @@ int minDistance(int dist[], bool visited_map[]) {
         }
     }
     return min_index;
-}
-
-// A utility function to print the path from source to target
-void printPath(int prev[], int target_index, Node nodes[]) {
-    if (prev[target_index] == -1) {
-        printf("%d", nodes[target_index].id);
-        return;
-    }
-    printPath(prev, prev[target_index], nodes);
-    printf(" -> %d", nodes[target_index].id);
 }
 
 // Dijkstra's single-source shortest path algorithm with structs
@@ -108,7 +93,7 @@ void dijkstra(int graph[V][V], Node nodes[], int src_id, int target_id) {
 }
 
 int main() {
-    /* Let us create the example graph discussed above */
+    // Example Graph
     int graph[V][V] = {
         {0, 4, 2, 0, 0},
         {4, 0, 1, 3, 2},
