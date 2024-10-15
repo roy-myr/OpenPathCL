@@ -18,16 +18,19 @@ int minDistance(int dist[], bool sptSet[]) {
     return min_index;
 }
 
-// A utility function to print the distance array
-void printSolution(int dist[], int prev[]) {
-    printf("Vertex\tDistance from Source\tPrevious Vertex\n");
-    for (int i = 0; i < V; i++) {
-        printf("%d \t\t %d\t\t\t%d\n", i, dist[i], prev[i]);
+// A utility function to print the path from source to target
+void printPath(int prev[], int target) {
+    if (prev[target] == -1) {
+        printf("%d", target);
+        return;
     }
+    printPath(prev, prev[target]);
+    printf(" -> %d", target);
 }
 
 // Function that implements Dijkstra's single source shortest path algorithm
-void dijkstra(int graph[V][V], int src) {
+// and stops when the shortest path to a specific target is found
+void dijkstra(int graph[V][V], int src, int target) {
     int dist[V];  // The output array. dist[i] will hold the shortest distance from src to i
     bool visited_map[V]; // visited_map[i] will be true if vertex i is included in the shortest path tree
     int prev[V];    // prev[i] will store the previous vertex in the path
@@ -47,6 +50,11 @@ void dijkstra(int graph[V][V], int src) {
         // Pick the minimum distance vertex from the set of vertices not yet processed.
         int u = minDistance(dist, visited_map);
 
+        // If the selected vertex has an infinite distance, no further vertices are reachable
+        if (dist[u] == INT_MAX) {
+            break; // No need to process further, as remaining vertices are unreachable
+        }
+
         // Mark the picked vertex as processed
         visited_map[u] = true;
 
@@ -59,10 +67,22 @@ void dijkstra(int graph[V][V], int src) {
                 prev[v] = u; // Update previous vertex
             }
         }
+
+        // Check if the target vertex has been reached
+        if (u == target) {
+            break; // Stop the loop when the shortest path to the target is found
+        }
     }
 
-    // Print the constructed distance array
-    printSolution(dist, prev);
+    // After the loop, check if the target vertex has been reached
+    if (dist[target] != INT_MAX) {
+        printf("Shortest distance from %d to %d is %d\n", src, target, dist[target]);
+        printf("Path: ");
+        printPath(prev, target);
+        printf("\n");
+    } else {
+        printf("Target %d cannot be reached from source %d\n", target, src);
+    }
 }
 
 int main() {
@@ -75,7 +95,10 @@ int main() {
         {0, 2, 0, 5, 0}
     };
 
-    dijkstra(graph, 0);
+    int source = 0;
+    int target = 1;
+
+    dijkstra(graph, source, target);
 
     return 0;
 }
