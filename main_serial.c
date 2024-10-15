@@ -104,11 +104,11 @@ int main() {
 
     // Define the nodes with their ID and index
     Node nodes[V] = {
-        {0, 101}, // Node with ID 101 and index 0
-        {1, 102}, // Node with ID 102 and index 1
-        {2, 103}, // Node with ID 103 and index 2
-        {3, 104}, // Node with ID 104 and index 3
-        {4, 105}  // Node with ID 105 and index 4
+        {0, 101, 56.98496, -83.27986}, // Node with ID 101 and index 0
+        {1, 102, 57.98496, -93.27986}, // Node with ID 102 and index 1
+        {2, 103, 58.98496, -103.27986}, // Node with ID 103 and index 2
+        {3, 104, 59.98496, -113.27986}, // Node with ID 104 and index 3
+        {4, 105, 60.98496, -123.27986}  // Node with ID 105 and index 4
     };
 
     // Specify the source and target using node IDs

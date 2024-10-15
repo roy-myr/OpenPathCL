@@ -5,6 +5,8 @@
 typedef struct {
     int index; // Index in the graph matrix
     int id;    // Node ID
+    double lat; // Latitude of the Node
+    double lon; // Longitude of the Node
 } Node;
 
 // OpenPathCL functions that are the same in both the serial and parallel implementations
