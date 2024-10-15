@@ -20,24 +20,24 @@ int minDistance(int dist[], bool visited_map[]) {
 }
 
 // Dijkstra's single-source shortest path algorithm with structs
-void dijkstra(int graph[V][V], Node nodes[], int src_id, int target_id) {
+void dijkstra(int graph[V][V], Node nodes[], int start_id, int destination_id) {
     int dist[V];     // Output array. dist[i] holds the shortest distance from src to i
     bool visited_map[V]; // visited_map[i] is true if vertex i is included in the shortest path tree
     int prev[V];     // prev[i] stores the previous vertex in the path
 
-    // Find the index of the source and target nodes using their IDs
-    int src = -1, target = -1;
+    // Find the index of the start and destination nodes using their IDs
+    int start = -1, destination = -1;
     for (int i = 0; i < V; i++) {
-        if (nodes[i].id == src_id) {
-            src = i;
+        if (nodes[i].id == start_id) {
+            start = i;
         }
-        if (nodes[i].id == target_id) {
-            target = i;
+        if (nodes[i].id == destination_id) {
+            destination = i;
         }
     }
 
     // If the source or target doesn't exist, exit the function
-    if (src == -1 || target == -1) {
+    if (start == -1 || destination == -1) {
         printf("Invalid source or target ID.\n");
         return;
     }
@@ -50,7 +50,7 @@ void dijkstra(int graph[V][V], Node nodes[], int src_id, int target_id) {
     }
 
     // Distance of source vertex from itself is always 0
-    dist[src] = 0;
+    dist[start] = 0;
 
     // Find the shortest path for all vertices
     for (int count = 0; count < V - 1; count++) {
@@ -76,19 +76,19 @@ void dijkstra(int graph[V][V], Node nodes[], int src_id, int target_id) {
         }
 
         // Check if the target vertex has been reached
-        if (u == target) {
+        if (u == destination) {
             break; // Stop the loop when the shortest path to the target is found
         }
     }
 
     // After the loop, check if the target vertex has been reached
-    if (dist[target] != INT_MAX) {
-        printf("Shortest distance from %d to %d is %d\n", src_id, target_id, dist[target]);
+    if (dist[destination] != INT_MAX) {
+        printf("Shortest distance from %d to %d is %d\n", start_id, destination_id, dist[destination]);
         printf("Path: ");
-        printPath(prev, target, nodes);
+        printPath(prev, destination, nodes);
         printf("\n");
     } else {
-        printf("Target %d cannot be reached from source %d\n", target_id, src_id);
+        printf("Target %d cannot be reached from source %d\n", destination_id, start_id);
     }
 }
 
