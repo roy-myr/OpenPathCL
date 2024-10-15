@@ -98,6 +98,7 @@ void dijkstra(double graph[V][V], Node nodes[], int start_id, int destination_id
         printf("Shortest distance from ID %d to ID %d is %.2fm\n", start_id, destination_id, dist[destination]);
         printf("Path: ");
         printNodePath(nodePath); // Print the nodePath
+        displayPathOnMap(nodePath);  // Display the Path on a Map
         freeNodePath(nodePath);   // Free the allocated memory for the nodePath
     } else {
         printf("Target %d cannot be reached from source %d\n", destination_id, start_id);
@@ -126,8 +127,8 @@ int main() {
     };
 
     // Specify the source and target using node IDs
-    int source_id = 103;
-    int target_id = 104;
+    int source_id = 100;
+    int target_id = 105;
 
     // Run Dijkstra's algorithm with the source and target IDs
     dijkstra(graph, nodes, source_id, target_id);

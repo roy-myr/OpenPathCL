@@ -24,6 +24,6 @@ PathNode* createPathNode(const Node data);
 void appendToNodePath(PathNode** head, const Node data);
 void printNodePath(PathNode* head);
 void freeNodePath(PathNode* head);
-Node* retrievePath(int nodeCount, Node nodes[], const int prev[], int destination, int* pathLength);
+void displayPathOnMap(PathNode* nodePath);
 
 #endif //COMMON_H
