@@ -2,9 +2,8 @@
 #include <stdlib.h>
 #include "common.h"
 
-#include <windows.h>
-#include <winhttp.h>
-#pragma comment(lib, "winhttp.lib")
+#include <string.h>
+#include <curl/curl.h>
 
 // Function to create a PathNode
 PathNode* createPathNode(const Node data) {
@@ -40,7 +39,7 @@ void appendToNodePath(PathNode** head, const Node data) {
 void printNodePath(PathNode* head) {
     const PathNode* current = head;
     while (current != NULL) {
-        printf("%d (%f, %f)", current->data.id, current->data.lat, current->data.lon);
+        printf("%lld (%f, %f)", current->data.id, current->data.lat, current->data.lon);
         if (current->next != NULL) {
             printf(" <- ");
         }
@@ -179,103 +178,77 @@ void parseAndStoreNoes(const char* jsonResponse, Node** nodes, int* nodeCount) {
     }
 }
 
+// Structure to hold response data
+struct MemoryStruct {
+    char* memory;
+    size_t size;
+};
+
+static size_t WriteMemoryCallback(const void* contents, const size_t size, size_t nmemb, void* userp) {
+    size_t realSize = size * nmemb;
+    struct MemoryStruct* mem = userp;
+
+    char* ptr = realloc(mem->memory, mem->size + realSize + 1);
+    if (ptr == NULL) {
+        // out of memory
+        printf("not enough memory (realloc returned NULL)\n");
+        return 0;
+    }
+
+    mem->memory = ptr;
+    memcpy(&(mem->memory[mem->size]), contents, realSize);
+    mem->size += realSize;
+    mem->memory[mem->size] = 0;
+
+    return realSize;
+}
 
 // Function to get road nodes between two coordinates with a buffer
 void getRoadNodes(const double lat1, const double lon1, const double lat2, const double lon2, const double buffer, Node** nodes, int* nodeCount) {
-    // Define the Overpass API host and endpoint
-    LPCWSTR host = L"overpass-api.de";
-    LPCWSTR endpoint = L"/api/interpreter";
+    CURL* curl;
+    CURLcode res;
+    struct MemoryStruct response;
 
-    // Initialize WinHTTP session
-    const HINTERNET hSession = WinHttpOpen(L"A WinHTTP Example Program/1.0",
-                                           WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
-                                           WINHTTP_NO_PROXY_NAME,
-                                           WINHTTP_NO_PROXY_BYPASS, 0);
+    response.memory = malloc(1);  // will be grown as needed by realloc
+    response.size = 0;            // no data at this point
 
-    if (hSession) {
-        // Connect to the Overpass API
-        const HINTERNET hConnect = WinHttpConnect(hSession, host, INTERNET_DEFAULT_HTTP_PORT, 0);
+    curl_global_init(CURL_GLOBAL_DEFAULT);
+    curl = curl_easy_init();
 
-        if (hConnect) {
-            // Create a request for the POST method
-            const HINTERNET hRequest = WinHttpOpenRequest(hConnect, L"POST", endpoint,
-                                                          NULL, WINHTTP_NO_REFERER,
-                                                          WINHTTP_DEFAULT_ACCEPT_TYPES, 0);
+    if (curl) {
+        char postData[1024];
+        snprintf(postData, sizeof(postData),
+            "[out:json];"
+            "way[\"highway\"](around:%f,%f,%f,%f,%f);"
+            "out body;>;out skel qt;",
+            buffer, lat1, lon1, lat2, lon2);
 
-            if (hRequest) {
-                // Prepare the Overpass API query
-                char postData[1024];
-                snprintf(postData, sizeof(postData),
-                    "[out:json];"
-                    "way[\"highway\"](around:%f,%f,%f,%f,%f);"
-                    "out body;>;out skel qt;",
-                    buffer, lat1, lon1, lat2, lon2);
+        // Set the API endpoint
+        curl_easy_setopt(curl, CURLOPT_URL, "https://overpass-api.de/api/interpreter");
 
-                // Set up headers
-                const wchar_t *headers = L"Content-Type: application/x-www-form-urlencoded";
-                DWORD postDataLength = (DWORD)strlen(postData);
+        // Set POST request data
+        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, postData);
 
-                // Send the request
-                BOOL bResults = WinHttpSendRequest(hRequest, headers, -1L, (LPVOID)postData, postDataLength, postDataLength, 0);
+        // Set the callback function to handle the response
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void*)&response);
 
-                // Receive a response
-                if (bResults) {
-                    bResults = WinHttpReceiveResponse(hRequest, NULL);
-                }
+        // Perform the request
+        res = curl_easy_perform(curl);
 
-                if (bResults) {
-                    DWORD dwSize = 0;
-                    DWORD dwDownloaded = 0;
-                    LPSTR pszOutBuffer;
-                    BOOL  bContinue = TRUE;
-
-                    // Initial allocation for the response buffer
-                    size_t bufferSize = 1024; // Start with 1 KB
-                    LPSTR responseBuffer = (LPSTR)malloc(bufferSize);
-                    if (!responseBuffer) {
-                        printf("Memory allocation failed\n");
-                        return;
-                    }
-                    responseBuffer[0] = '\0'; // Initialize the buffer
-
-                    // Keep checking for data until there's none left
-                    do {
-                        dwSize = 0;
-                        if (WinHttpQueryDataAvailable(hRequest, &dwSize)) {
-                            // Resize the buffer if necessary
-                            if (dwSize + strlen(responseBuffer) + 1 > bufferSize) {
-                                // Increase the buffer size to fit the new data
-                                bufferSize = (dwSize + strlen(responseBuffer) + 1) * 2; // double the size
-                                responseBuffer = (LPSTR)realloc(responseBuffer, bufferSize);
-                                if (!responseBuffer) {
-                                    printf("Memory reallocation failed\n");
-                                    return;
-                                }
-                            }
-
-                            // Read the data
-                            if (WinHttpReadData(hRequest, (LPVOID)(responseBuffer + strlen(responseBuffer)), dwSize, &dwDownloaded)) {
-                                responseBuffer[strlen(responseBuffer) + dwDownloaded] = '\0'; // Null-terminate the string
-                            }
-                        }
-                    } while (dwSize > 0);
-                    // Print the response before parsing
-                    printf("Full JSON Response: %s\n", responseBuffer);
-
-                    // Parse the response
-                    parseAndStoreNoes(responseBuffer, nodes, nodeCount);
-
-                    // Clean up
-                    free(responseBuffer); // Free the buffer after use
-                }
-
-                // Clean up
-                WinHttpCloseHandle(hRequest);
-            }
-
-            WinHttpCloseHandle(hConnect);
+        // Check for errors
+        if (res != CURLE_OK) {
+            fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
+        } else {
+            // Parse the response here
+            printf("Full JSON Response: %s\n", response.memory);
+            parseAndStoreNoes(response.memory, nodes, nodeCount);
         }
 
-        WinHttpCloseHandle(hSession);
+        // Cleanup
+        curl_easy_cleanup(curl);
+        free(response.memory);
     }
+
+    curl_global_cleanup();
 }
