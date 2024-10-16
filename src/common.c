@@ -141,7 +141,7 @@ void displayPathOnMap(PathNode* nodePath) {
 
 
 // Function to extract the Nodes from the JSON Response
-void parseAndStoreNoes(const char* jsonResponse, Node** nodes, int* nodeCount) {
+void parseAndStoreJSON(const char* jsonResponse, Node** nodes, int* nodeCount, Road** roads, int* roadCount) {
     // Parse the JSON response
     cJSON *root = cJSON_Parse(jsonResponse);
     if (root == NULL) {
@@ -150,17 +150,22 @@ void parseAndStoreNoes(const char* jsonResponse, Node** nodes, int* nodeCount) {
     }
 
     *nodeCount = 0;
-    int capacity = 10;
-    *nodes = (Node*)malloc(capacity * sizeof(Node));
+    int nodeCapacity = 10;
+    *nodes = (Node*)malloc(nodeCapacity * sizeof(Node));
 
-    // Iterate through the JSON array of nodes
+    *roadCount = 0;
+    int roadCapacity = 10;
+    *roads = (Road*)malloc(roadCapacity * sizeof(Road));
+
+    // Iterate through the JSON array of elements
     const cJSON *elements = cJSON_GetObjectItemCaseSensitive(root, "elements");
     cJSON *element = NULL;
     cJSON_ArrayForEach(element, elements) {
         const cJSON *type = cJSON_GetObjectItemCaseSensitive(element, "type");
+
+        // Handle "node" elements
         if (cJSON_IsString(type) && (strcmp(type->valuestring, "node") == 0)) {
             Node node;
-
             const cJSON *id = cJSON_GetObjectItemCaseSensitive(element, "id");
             const cJSON *lat = cJSON_GetObjectItemCaseSensitive(element, "lat");
             const cJSON *lon = cJSON_GetObjectItemCaseSensitive(element, "lon");
@@ -174,10 +179,43 @@ void parseAndStoreNoes(const char* jsonResponse, Node** nodes, int* nodeCount) {
                 (*nodes)[*nodeCount] = node;
                 (*nodeCount)++;
 
-                // Resize the array if necessary
-                if (*nodeCount >= capacity) {
-                    capacity *= 2;
-                    *nodes = (Node*)realloc(*nodes, capacity * sizeof(Node));
+                // Resize the nodes array if necessary
+                if (*nodeCount >= nodeCapacity) {
+                    nodeCapacity *= 2;
+                    *nodes = (Node*)realloc(*nodes, nodeCapacity * sizeof(Node));
+                }
+            }
+        }
+        // Handle "way" elements (Roads)
+        else if (cJSON_IsString(type) && (strcmp(type->valuestring, "way") == 0)) {
+            Road road;
+            const cJSON *id = cJSON_GetObjectItemCaseSensitive(element, "id");
+            const cJSON *nodesArray = cJSON_GetObjectItemCaseSensitive(element, "nodes");
+
+            if (cJSON_IsNumber(id) && cJSON_IsArray(nodesArray)) {
+                road.id = id->valuedouble;
+                road.nodeCount = cJSON_GetArraySize(nodesArray);
+
+                // Allocate memory for the node IDs in this road
+                road.nodes = (long long*)malloc(road.nodeCount * sizeof(long long));
+
+                int nodeIndex = 0;
+                cJSON *nodeId = NULL;
+                cJSON_ArrayForEach(nodeId, nodesArray) {
+                    if (cJSON_IsNumber(nodeId)) {
+                        road.nodes[nodeIndex] = nodeId->valuedouble;
+                        nodeIndex++;
+                    }
+                }
+
+                // Add the road to the roads array
+                (*roads)[*roadCount] = road;
+                (*roadCount)++;
+
+                // Resize the roads array if necessary
+                if (*roadCount >= roadCapacity) {
+                    roadCapacity *= 2;
+                    *roads = (Road*)realloc(*roads, roadCapacity * sizeof(Road));
                 }
             }
         }
@@ -186,6 +224,7 @@ void parseAndStoreNoes(const char* jsonResponse, Node** nodes, int* nodeCount) {
     // Clean up
     cJSON_Delete(root);
 }
+
 
 // Structure to hold response data
 struct MemoryStruct {
@@ -212,8 +251,8 @@ static size_t WriteMemoryCallback(const void* contents, const size_t size, size_
     return realSize;
 }
 
-// Function to get road nodes between two coordinates with a buffer
-void getRoadNodes(const double lat1, const double lon1, const double lat2, const double lon2, const double buffer, Node** nodes, int* nodeCount) {
+// Function to get the closest node to given coordinates
+long long getClosestNode(const double lat, const double lon) {
     CURL* curl;
     CURLcode res;
     struct MemoryStruct response;
@@ -221,7 +260,98 @@ void getRoadNodes(const double lat1, const double lon1, const double lat2, const
     response.memory = malloc(1);  // will be grown as needed by realloc
     response.size = 0;            // no data at this point
 
-    curl_global_init(CURL_GLOBAL_DEFAULT);
+    curl = curl_easy_init();
+
+    if (curl) {
+        char postData[512];
+        snprintf(postData, sizeof(postData),
+            "[out:json];"
+            "way(around:50,%f,%f)[\"highway\"];"
+            "node(w)->.nodes;"
+            "(._;>;);"
+            "out body;",
+            lat, lon);
+
+        // Set the API endpoint
+        curl_easy_setopt(curl, CURLOPT_URL, "https://overpass-api.de/api/interpreter");
+
+        // Set POST request data
+        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, postData);
+
+        // Set the callback function to handle the response
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void*)&response);
+
+        // Perform the request
+        res = curl_easy_perform(curl);
+
+        // Check for errors
+        if (res != CURLE_OK) {
+            fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
+        } else {
+            // Parse the response and find the closest node
+            cJSON *root = cJSON_Parse(response.memory);
+            if (root != NULL) {
+                const cJSON *elements = cJSON_GetObjectItemCaseSensitive(root, "elements");
+                cJSON *element = NULL;
+
+                long long closestNodeId = -1;
+                double closestDistance = -1;
+
+                cJSON_ArrayForEach(element, elements) {
+                    const cJSON *type = cJSON_GetObjectItemCaseSensitive(element, "type");
+                    if (cJSON_IsString(type) && (strcmp(type->valuestring, "node") == 0)) {
+                        const cJSON *id = cJSON_GetObjectItemCaseSensitive(element, "id");
+                        const cJSON *latNode = cJSON_GetObjectItemCaseSensitive(element, "lat");
+                        const cJSON *lonNode = cJSON_GetObjectItemCaseSensitive(element, "lon");
+
+                        if (cJSON_IsNumber(id) && cJSON_IsNumber(latNode) && cJSON_IsNumber(lonNode)) {
+                            double nodeLat = latNode->valuedouble;
+                            double nodeLon = lonNode->valuedouble;
+
+                            // Calculate the distance (simple Euclidean distance)
+                            double distance = (lat - nodeLat) * (lat - nodeLat) + (lon - nodeLon) * (lon - nodeLon);
+                            if (closestDistance < 0 || distance < closestDistance) {
+                                closestDistance = distance;
+                                closestNodeId = id->valuedouble;
+                            }
+                        }
+                    }
+                }
+
+                cJSON_Delete(root);
+                free(response.memory);
+                curl_easy_cleanup(curl);
+                return closestNodeId;
+            }
+            free(response.memory);
+        }
+
+        // Cleanup
+        curl_easy_cleanup(curl);
+        free(response.memory);
+    }
+    return -1;
+}
+
+// Function to get road nodes between two coordinates with a buffer
+void getRoadNodes(
+        const double lat1,
+        const double lon1,
+        const double lat2,
+        const double lon2,
+        const double buffer,
+        Node** nodes,
+        int* nodeCount,
+        Road** roads,
+        int* roadCount) {
+    CURL* curl;
+    CURLcode res;
+    struct MemoryStruct response;
+
+    response.memory = malloc(1);  // will be grown as needed by realloc
+    response.size = 0;            // no data at this point
+
     curl = curl_easy_init();
 
     if (curl) {
@@ -250,13 +380,11 @@ void getRoadNodes(const double lat1, const double lon1, const double lat2, const
             fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
         } else {
             // Parse the response
-            parseAndStoreNoes(response.memory, nodes, nodeCount);
+            parseAndStoreJSON(response.memory, nodes, nodeCount, roads, roadCount);
         }
 
         // Cleanup
         curl_easy_cleanup(curl);
         free(response.memory);
     }
-
-    curl_global_cleanup();
 }
