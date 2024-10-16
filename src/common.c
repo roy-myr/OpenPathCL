@@ -4,10 +4,11 @@
 
 #include <string.h>
 #include <curl/curl.h>
+#include <cjson/cJSON.h>
 
 // Function to create a PathNode
 PathNode* createPathNode(const Node data) {
-    PathNode* newNode = (PathNode*)malloc(sizeof(PathNode));
+    PathNode* newNode = malloc(sizeof(PathNode));
     // check if the allocation was successful
     if (!newNode) {
         // Not successful. Return an error.
@@ -139,43 +140,51 @@ void displayPathOnMap(PathNode* nodePath) {
 }
 
 
-// Function to extract the Nodes from the JSOn Response
+// Function to extract the Nodes from the JSON Response
 void parseAndStoreNoes(const char* jsonResponse, Node** nodes, int* nodeCount) {
-    const char* pos = jsonResponse;  // Pointer to traverse the response
+    // Parse the JSON response
+    cJSON *root = cJSON_Parse(jsonResponse);
+    if (root == NULL) {
+        printf("Error parsing JSON\n");
+        return;
+    }
+
     *nodeCount = 0;
     int capacity = 10;
-
-    // Allocate memory for nodes
     *nodes = (Node*)malloc(capacity * sizeof(Node));
 
-    // Find each node in the response
-    while ((pos = strstr(pos, "\"type\": \"node\"")) != NULL) {
-        Node node;
+    // Iterate through the JSON array of nodes
+    const cJSON *elements = cJSON_GetObjectItemCaseSensitive(root, "elements");
+    cJSON *element = NULL;
+    cJSON_ArrayForEach(element, elements) {
+        const cJSON *type = cJSON_GetObjectItemCaseSensitive(element, "type");
+        if (cJSON_IsString(type) && (strcmp(type->valuestring, "node") == 0)) {
+            Node node;
 
-        // Find the node ID
-        if (sscanf(strstr(pos, "\"id\":") + 5, "%lld", &node.id) != 1) break;
+            const cJSON *id = cJSON_GetObjectItemCaseSensitive(element, "id");
+            const cJSON *lat = cJSON_GetObjectItemCaseSensitive(element, "lat");
+            const cJSON *lon = cJSON_GetObjectItemCaseSensitive(element, "lon");
 
-        // Find the latitude
-        if (sscanf(strstr(pos, "\"lat\":") + 6, "%lf", &node.lat) != 1) break;
+            if (cJSON_IsNumber(id) && cJSON_IsNumber(lat) && cJSON_IsNumber(lon)) {
+                node.id = id->valuedouble;
+                node.lat = lat->valuedouble;
+                node.lon = lon->valuedouble;
+                node.index = *nodeCount;
 
-        // Find the longitude
-        if (sscanf(strstr(pos, "\"lon\":") + 6, "%lf", &node.lon) != 1) break;
+                (*nodes)[*nodeCount] = node;
+                (*nodeCount)++;
 
-        // Set the index to the current nodeCount
-        node.index = *nodeCount;
-
-        // Add the node to the array
-        (*nodes)[*nodeCount] = node;
-        (*nodeCount)++;
-
-        // Resize the array if necessary
-        if (*nodeCount >= capacity) {
-            capacity *= 2;
-            *nodes = (Node*)realloc(*nodes, capacity * sizeof(Node));
+                // Resize the array if necessary
+                if (*nodeCount >= capacity) {
+                    capacity *= 2;
+                    *nodes = (Node*)realloc(*nodes, capacity * sizeof(Node));
+                }
+            }
         }
-
-        pos++;  // Move the pointer forward for the next search
     }
+
+    // Clean up
+    cJSON_Delete(root);
 }
 
 // Structure to hold response data
@@ -240,8 +249,7 @@ void getRoadNodes(const double lat1, const double lon1, const double lat2, const
         if (res != CURLE_OK) {
             fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
         } else {
-            // Parse the response here
-            printf("Full JSON Response: %s\n", response.memory);
+            // Parse the response
             parseAndStoreNoes(response.memory, nodes, nodeCount);
         }
 

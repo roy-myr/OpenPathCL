@@ -11,6 +11,9 @@ include_directories(${OpenCL_INCLUDE_DIRS})
 find_package(CURL REQUIRED)
 include_directories(${CURL_INCLUDE_DIRS})
 
+# Find the cJSON library and include directories
+find_package(cjson REQUIRED)
+
 # Add the serial version executable
 add_executable(OpenPathCL_serial
         src/main_serial.c
@@ -19,6 +22,9 @@ add_executable(OpenPathCL_serial
 
 # Link CURL to the serial version
 target_link_libraries(OpenPathCL_serial ${CURL_LIBRARIES})
+
+# Add cJSON to the serial version
+target_link_libraries(OpenPathCL_serial cjson)
 
 # Add the parallel version executable
 add_executable(OpenPathCL_parallel
@@ -31,3 +37,6 @@ target_link_libraries(OpenPathCL_parallel ${CURL_LIBRARIES})
 
 # Link OpenCL to the parallel version
 target_link_libraries(OpenPathCL_parallel ${OpenCL_LIBRARIES})
+
+# Add cJSON to the parallel version
+target_link_libraries(OpenPathCL_serial cjson)
