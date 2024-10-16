@@ -13,18 +13,18 @@ include_directories(${CURL_INCLUDE_DIRS})
 
 # Add the serial version executable
 add_executable(OpenPathCL_serial
-        main_serial.c
-        common.c
-        common.h)
+        src/main_serial.c
+        src/common.c
+        src/common.h)
 
 # Link CURL to the serial version
 target_link_libraries(OpenPathCL_serial ${CURL_LIBRARIES})
 
 # Add the parallel version executable
 add_executable(OpenPathCL_parallel
-        main_parallel.c
-        common.c
-        common.h)
+        src/main_parallel.c
+        src/common.c
+        src/common.h)
 
 # Link CURL to the parallel version
 target_link_libraries(OpenPathCL_parallel ${CURL_LIBRARIES})
