@@ -8,6 +8,7 @@ The task was to implement two route planning algorithms in C, one serial and one
 ## Requirements
 > [!IMPORTANT]
 > This project uses the OpenCL, Libcurl and cJSON libraries. They must be installed to use this project.
-> Getting OpenCL to work on Windows is possible, but not easy.
+
+> [!NOTE]
 > This code has only been tested on macOS. It may need to be adapted to run on your platform.
 
