@@ -4,8 +4,8 @@ project(OpenPathCL C)
 set(CMAKE_C_STANDARD 11)
 
 # Find OpenCL package and include the directories
-find_package(OpenCL REQUIRED)
-include_directories(${OpenCL_INCLUDE_DIRS})
+# find_package(OpenCL REQUIRED)
+# include_directories(${OpenCL_INCLUDE_DIRS})
 
 # Find CURL package and include the directories
 find_package(CURL REQUIRED)
