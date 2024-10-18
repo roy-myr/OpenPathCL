@@ -88,11 +88,34 @@ corresponding nodes on the map.
 ### Performance Comparison
 
 
-## Limitations
-
-
 ## Improvements
 
+### Larger distances:
 
+At the moment the Algorithm can not handle really high distances. # ToDo: Find limit and reason
 
+### Bounding Box:
+At the moment the bounding box, so the area where Nodes and Ways are searched in, is only within a 300m radius within 
+the direct path between that start and end koordinate. In Some cases this is not enough since there is no a valid path 
+inside this region. The Bounding box would need to be improved to fix this issue.
 
+### Selection of Ways
+At the Moment the ways that are taken into account when planning the route are not really practical. They include 
+such ways that can only be taken by foot as well as highways wich definitely should not be taken by foot. So it`s 
+neither a good route to take by car, nor is it one to walk. The Request to the Overpass API would have to be adjusted 
+to filter out only the way types that are wanted.
+
+### One-Ways
+At the moment every way is considered two-ways. One-way roads would need to be detected and the adjacency matrix would 
+have to represent them.
+
+### Better weight
+At the moment the weight for the graph and the route planning algorithm is the distance between the nodes. Often this 
+is not really the value that is interesting for a user. The user wants to take the route that takes the least amount 
+of time, not the one that is the shortest distance. The weight would have to be adjusted to take this into account.
+To do that the time that it takes to travel between weights could be calculated using the speed limit and the distance.
+However sometimes the speed limit is not saved inside the OSM database wich would be a problem.
+
+### User Input
+At the moment a user has to enter the start and destination coordinates. This is not really practically. Alternatives 
+could be to enter an address or use a map to select a start and destination.
