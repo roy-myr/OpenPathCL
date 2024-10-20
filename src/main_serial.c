@@ -238,7 +238,7 @@ int main() {
         start_lon,
         destination_lat,
         destination_lon,
-        3000,
+        300.00,
         &nodes,
         &nodeCount,
         &roads,
