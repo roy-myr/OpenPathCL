@@ -147,7 +147,7 @@ void dijkstra(
             break;
         }
 
-        printf("Picked vertices %d, distance: %f\n", u, dist[u]);
+        //printf("Picked vertices %d, distance: %f\n", u, dist[u]);
 
         // If the selected vertex has an infinite distance, no further vertices are reachable
         if (dist[u] == INF) {
@@ -238,7 +238,7 @@ int main() {
         start_lon,
         destination_lat,
         destination_lon,
-        300.00,
+        3000.00,
         &nodes,
         &nodeCount,
         &roads,
