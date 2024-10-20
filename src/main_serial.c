@@ -140,7 +140,14 @@ void dijkstra(
         // Pick the minimum distance vertex from the set of vertices not yet processed.
         int u = minDistance(vertices, dist, visited_map);
 
-        // printf("Picked vertices %d, distance: %f\n", u, dist[u]);
+        // check if a vertices was found
+        if (u == -1) {
+            // All remaining vertices are inaccessible from source
+            printf("Couldn't find a vertices with minimal distance. Terminate the program.\n");
+            break;
+        }
+
+        printf("Picked vertices %d, distance: %f\n", u, dist[u]);
 
         // If the selected vertex has an infinite distance, no further vertices are reachable
         if (dist[u] == INF) {
@@ -194,10 +201,10 @@ void dijkstra(
 
 int main() {
     // set the coordinates
-    const double start_lat = 53.502373293834296;
-    const double start_lon = 8.491150309782855;
-    const double destination_lat = 53.501242;
-    const double destination_lon =  8.4989010;
+    const double start_lat = 53.753829290390485;
+    const double start_lon = 9.671952540458692;
+    const double destination_lat = 53.54434910428687;
+    const double destination_lon =   9.936003265725867;
 
     // initialise curl
     curl_global_init(CURL_GLOBAL_DEFAULT);
@@ -231,7 +238,7 @@ int main() {
         start_lon,
         destination_lat,
         destination_lon,
-        300,
+        3000,
         &nodes,
         &nodeCount,
         &roads,

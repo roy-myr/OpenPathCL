@@ -31,6 +31,7 @@ void appendToNodePath(PathNode** head, const Node data) {
     }
     PathNode* current = *head;
     while (current->next != NULL) {
+        if (current->next == NULL) break;
         current = current->next; // Traverse to the last node
     }
     current->next = newNode; // Add the new node at the end
@@ -181,8 +182,12 @@ void parseAndStoreJSON(const char* jsonResponse, Node** nodes, int* nodeCount, R
 
                 // Resize the nodes array if necessary
                 if (*nodeCount >= nodeCapacity) {
-                    nodeCapacity *= 2;
+                    nodeCapacity *= 2;  // Double the size
                     *nodes = (Node*)realloc(*nodes, nodeCapacity * sizeof(Node));
+                    if (*nodes == NULL) {
+                        perror("Memory reallocation failed for nodes");
+                        exit(EXIT_FAILURE);  // Handle failure
+                    }
                 }
             }
         }
@@ -214,9 +219,12 @@ void parseAndStoreJSON(const char* jsonResponse, Node** nodes, int* nodeCount, R
 
                 // Resize the roads array if necessary
                 if (*roadCount >= roadCapacity) {
-                    roadCapacity *= 2;
+                    roadCapacity *= 2;  // Double the size
                     *roads = (Road*)realloc(*roads, roadCapacity * sizeof(Road));
-                }
+                    if (*roads == NULL) {
+                        perror("Memory reallocation failed for roads");
+                        exit(EXIT_FAILURE);  // Handle failure
+                    }               }
             }
         }
     }
@@ -360,6 +368,11 @@ void getRoadNodes(
             "[out:json];"
             "way[\"highway\"](around:%f,%f,%f,%f,%f);"
             "out body;>;out skel qt;",
+            buffer, lat1, lon1, lat2, lon2);
+        printf("Request:\n"
+            "[out:json];\n"
+            "way[\"highway\"](around:%f,%f,%f,%f,%f);\n"
+            "out body;>;out skel qt;\n",
             buffer, lat1, lon1, lat2, lon2);
 
         // Set the API endpoint
