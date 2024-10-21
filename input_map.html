@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Leaflet Draw with Start and End Points</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+</head>
+<body>
+<div id="map" style="height: 600px;"></div>
+<button id="sendData" disabled>Send Data</button>
+<button id="clearPoints">Clear Points</button>
+<button id="clearArea">Clear Area</button>
+
+<script>
+    // Initialize the map
+    var map = L.map('map').setView([53.75383, 9.67194], 13); // Example coordinates
+
+    // Add a tile layer
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: 'Map data © OpenStreetMap contributors',
+    }).addTo(map);
+
+    // Add a feature group to store drawn items (markers, shapes)
+    var drawnItems = new L.FeatureGroup();
+    map.addLayer(drawnItems);
+
+    // Add drawing controls to allow markers, rectangles, and polygons
+    var drawControl = new L.Control.Draw({
+        draw: {
+            polyline: false,
+            polygon: true,
+            circle: false,
+            circlemarker: false,
+            marker: true,  // Enable marker drawing
+            rectangle: true, // Enable rectangle drawing
+        },
+        edit: {
+            featureGroup: drawnItems,
+            remove: true // Allow editing or removing drawn shapes
+        }
+    });
+    map.addControl(drawControl);
+
+    // Store the drawn shape and selected markers
+    var drawnShape = null;
+    var startPointMarker = null;
+    var endPointMarker = null;
+
+    // Handle shape draw creation event
+    map.on('draw:created', function (e) {
+        drawnShape = e.layer;
+        drawnItems.addLayer(drawnShape); // Add the newly drawn shape
+
+        // Update the send button state
+        updateSendButtonState();
+    });
+
+    // Handle marker placement
+    map.on('draw:created', function (e) {
+        if (e.layerType === 'marker') {
+            handleMarkerPlacement(e.layer);
+        }
+    });
+
+    // Function to handle the placement of start and end markers
+    function handleMarkerPlacement(marker) {
+        if (!startPointMarker) {
+            // If no start point is set, set this marker as the start point
+            startPointMarker = marker;
+            drawnItems.addLayer(startPointMarker); // Add marker to the feature group
+        } else if (!endPointMarker) {
+            // If no end point is set, set this marker as the end point
+            endPointMarker = marker;
+            drawnItems.addLayer(endPointMarker); // Add marker to the feature group
+        } else {
+            // If both markers are already set, prevent adding more markers
+            marker.remove()
+            return;
+        }
+
+        // Update the send button state after placing markers
+        updateSendButtonState();
+    }
+
+    // Function to update the state of the "Send Data" button
+    function updateSendButtonState() {
+        var sendDataButton = document.getElementById('sendData');
+        if (drawnShape && startPointMarker && endPointMarker) {
+            sendDataButton.disabled = false; // Enable the button if both conditions are met
+        } else {
+            sendDataButton.disabled = true; // Disable the button otherwise
+        }
+    }
+
+    // Send data to the backend
+    document.getElementById('sendData').addEventListener('click', function () {
+        if (!drawnShape || !startPointMarker || !endPointMarker) {
+            alert('Please draw a shape and place both start and end points.');
+            return;
+        }
+
+        var data = {
+            bbox: drawnShape instanceof L.Rectangle
+                ? [
+                    drawnShape.getBounds().getNorthWest().lat, drawnShape.getBounds().getNorthWest().lng,
+                    drawnShape.getBounds().getNorthEast().lat, drawnShape.getBounds().getNorthEast().lng,
+                    drawnShape.getBounds().getSouthEast().lat, drawnShape.getBounds().getSouthEast().lng,
+                    drawnShape.getBounds().getSouthWest().lat, drawnShape.getBounds().getSouthWest().lng
+                ]
+                : drawnShape.getLatLngs()[0].flatMap(function (point) {
+                    return [point.lat, point.lng];
+                }), // For polygon, flatten lat/lng array
+            start: [startPointMarker.getLatLng().lat, startPointMarker.getLatLng().lng],
+            dest: [endPointMarker.getLatLng().lat, endPointMarker.getLatLng().lng]
+        };
+
+        // Log the data
+        console.log(data);
+
+        // POST data to backend
+        fetch('YOUR_BACKEND_ENDPOINT', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(data),
+        })
+            .then(response => response.json())
+            .then(data => console.log('Success:', data))
+            .catch((error) => console.error('Error:', error));
+    });
+
+    // Function to clear the area (remove drawn shapes and markers)
+    function clearArea() {
+        drawnItems.clearLayers(); // Remove all drawn shapes and markers
+        drawnShape = null; // Reset the shape reference
+        startPointMarker = null; // Reset start point marker
+        endPointMarker = null; // Reset end point marker
+        updateSendButtonState(); // Check if the send button should be enabled
+    }
+
+    // Add button functionality to clear the area
+    document.getElementById('clearArea').addEventListener('click', clearArea);
+
+    // Function to clear start and end points
+    document.getElementById('clearPoints').addEventListener('click', function () {
+        drawnItems.removeLayer(startPointMarker);
+        drawnItems.removeLayer(endPointMarker);
+        startPointMarker = null;
+        endPointMarker = null;
+        updateSendButtonState(); // Update button state
+    });
+</script>
+</body>
+</html>
