@@ -39,7 +39,7 @@
         },
         edit: {
             featureGroup: drawnItems,
-            remove: true // Allow editing or removing drawn shapes
+            remove: true // Allow editing or removing drawn shapes and markers
         }
     });
     map.addControl(drawControl);
@@ -49,20 +49,38 @@
     var startPointMarker = null;
     var endPointMarker = null;
 
-    // Handle shape draw creation event
+    // Handle shape draw creation event (shape or marker)
     map.on('draw:created', function (e) {
-        drawnShape = e.layer;
-        drawnItems.addLayer(drawnShape); // Add the newly drawn shape
+        if (e.layerType === 'marker') {
+            handleMarkerPlacement(e.layer);  // Handle marker placement
+        } else {
+            drawnShape = e.layer;
+            drawnItems.addLayer(drawnShape); // Add the newly drawn shape
+        }
 
         // Update the send button state
         updateSendButtonState();
     });
 
-    // Handle marker placement
-    map.on('draw:created', function (e) {
-        if (e.layerType === 'marker') {
-            handleMarkerPlacement(e.layer);
-        }
+    // Handle shape or marker editing event
+    map.on('draw:edited', function () {
+        updateSendButtonState();  // Recheck if markers are inside the shape
+    });
+
+    // Handle deletion of markers or shapes
+    map.on('draw:deleted', function (e) {
+        e.layers.eachLayer(function (layer) {
+            // Check if start or end point markers were deleted and reset them
+            if (layer === startPointMarker) {
+                startPointMarker = null;
+            }
+            if (layer === endPointMarker) {
+                endPointMarker = null;
+            }
+        });
+
+        // Update the button state after deletion
+        updateSendButtonState();
     });
 
     // Function to handle the placement of start and end markers
@@ -77,7 +95,7 @@
             drawnItems.addLayer(endPointMarker); // Add marker to the feature group
         } else {
             // If both markers are already set, prevent adding more markers
-            marker.remove()
+            marker.remove();
             return;
         }
 
@@ -88,11 +106,32 @@
     // Function to update the state of the "Send Data" button
     function updateSendButtonState() {
         var sendDataButton = document.getElementById('sendData');
-        if (drawnShape && startPointMarker && endPointMarker) {
-            sendDataButton.disabled = false; // Enable the button if both conditions are met
+
+        // Check if markers are inside the drawn shape
+        var markersInsideShape = startPointMarker && endPointMarker && drawnShape &&
+            isMarkerInsideShape(startPointMarker) && isMarkerInsideShape(endPointMarker);
+
+        if (drawnShape && startPointMarker && endPointMarker && markersInsideShape) {
+            sendDataButton.disabled = false; // Enable the button if all conditions are met
         } else {
             sendDataButton.disabled = true; // Disable the button otherwise
         }
+    }
+
+    // Function to check if a marker is inside the drawn shape
+    function isMarkerInsideShape(marker) {
+        if (!drawnShape) return false;
+
+        var markerLatLng = marker.getLatLng();
+        if (drawnShape instanceof L.Rectangle) {
+            return drawnShape.getBounds().contains(markerLatLng);
+        } else if (drawnShape instanceof L.Polygon) {
+            return drawnShape.getLatLngs()[0].some(function (point) {
+                return L.latLngBounds(drawnShape.getLatLngs()).contains(markerLatLng);
+            });
+        }
+
+        return false;
     }
 
     // Send data to the backend
@@ -134,21 +173,23 @@
     });
 
     // Function to clear the area (remove drawn shapes and markers)
+    // Function to clear only the drawn shape (without removing start/end markers)
     function clearArea() {
-        drawnItems.clearLayers(); // Remove all drawn shapes and markers
-        drawnShape = null; // Reset the shape reference
-        startPointMarker = null; // Reset start point marker
-        endPointMarker = null; // Reset end point marker
+        if (drawnShape) {
+            drawnItems.removeLayer(drawnShape); // Remove only the drawn shape
+            drawnShape = null; // Reset the shape reference
+        }
         updateSendButtonState(); // Check if the send button should be enabled
     }
+
 
     // Add button functionality to clear the area
     document.getElementById('clearArea').addEventListener('click', clearArea);
 
     // Function to clear start and end points
     document.getElementById('clearPoints').addEventListener('click', function () {
-        drawnItems.removeLayer(startPointMarker);
-        drawnItems.removeLayer(endPointMarker);
+        if (startPointMarker) drawnItems.removeLayer(startPointMarker);
+        if (endPointMarker) drawnItems.removeLayer(endPointMarker);
         startPointMarker = null;
         endPointMarker = null;
         updateSendButtonState(); // Update button state
