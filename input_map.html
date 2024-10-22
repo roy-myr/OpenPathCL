@@ -54,6 +54,9 @@
         if (e.layerType === 'marker') {
             handleMarkerPlacement(e.layer);  // Handle marker placement
         } else {
+            if (drawnShape) {
+                drawnItems.removeLayer(drawnShape); // Remove existing shapes
+            }
             drawnShape = e.layer;
             drawnItems.addLayer(drawnShape); // Add the newly drawn shape
         }
@@ -76,6 +79,9 @@
             }
             if (layer === endPointMarker) {
                 endPointMarker = null;
+            }
+            if (layer === drawnShape) {
+                drawnShape = null;
             }
         });
 
@@ -126,12 +132,29 @@
         if (drawnShape instanceof L.Rectangle) {
             return drawnShape.getBounds().contains(markerLatLng);
         } else if (drawnShape instanceof L.Polygon) {
-            return drawnShape.getLatLngs()[0].some(function (point) {
-                return L.latLngBounds(drawnShape.getLatLngs()).contains(markerLatLng);
-            });
+            return isMarkerInsidePolygon(marker, drawnShape);
         }
 
         return false;
+    }
+
+    // Function to check if a marker is inside a polygon
+    function isMarkerInsidePolygon(marker, poly) {
+        var inside = false;
+        var x = marker.getLatLng().lat, y = marker.getLatLng().lng;
+        for (var ii=0;ii<poly.getLatLngs().length;ii++){
+            var polyPoints = poly.getLatLngs()[ii];
+            for (var i = 0, j = polyPoints.length - 1; i < polyPoints.length; j = i++) {
+                var xi = polyPoints[i].lat, yi = polyPoints[i].lng;
+                var xj = polyPoints[j].lat, yj = polyPoints[j].lng;
+
+                var intersect = ((yi > y) != (yj > y))
+                    && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+                if (intersect) inside = !inside;
+            }
+        }
+
+        return inside;
     }
 
     // Send data to the backend
