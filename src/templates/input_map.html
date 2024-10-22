@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Leaflet Draw with Start and End Points</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+    <style>
+        body {
+            margin: 0;
+            display: flex;
+            height: 100vh; /* Full height */
+            font-family: Arial, sans-serif; /* Change font */
+            background-color: #2c2c2c; /* Dark background for the whole page */
+            color: #f4f4f4; /* Light text color */
+        }
+        #map {
+            flex: 1; /* 75% of the width */
+            height: 100%; /* Full height */
+        }
+        #sidebar {
+            flex: 0 0 auto; /* 25% of the width */
+            min-width: 450px;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start; /* Align content to the top */
+            align-items: center; /* Align content to the left */
+            background-color: #3c3c3c; /* Darker background for sidebar */
+        }
+        #input {
+            margin: 20px;
+            width: 85%;
+        }
+        h1 {
+            text-align: center;
+            margin-top: 50px; /* Adjusted top margin */
+            font-size: 36px; /* Slightly smaller font size */
+        }
+        h2 {
+            margin-bottom: 8px;
+        }
+        hr {
+            width: 99%;
+            margin: 0;
+            padding: 0;
+        }
+        p {
+            text-align: left; /* Align text to the left */
+        }
+        button {
+            width: 140px;
+            margin: 10px 0; /* Add spacing between buttons */
+            padding: 10px 15px; /* Padding for the buttons */
+            border: none; /* Remove border */
+            border-radius: 5px; /* Rounded corners */
+            background-color: #888; /* Green background */
+            color: white; /* White text color */
+            cursor: pointer; /* Pointer cursor on hover */
+            font-size: 16px; /* Button font size */
+            transition: background-color 0.3s; /* Smooth background color transition */
+        }
+        button:hover {
+            background-color: #777; /* Darker green on hover */
+        }
+        button.submit {
+            background-color: #4caf50; /* Green background */
+            color: white; /* White text color */
+        }
+        button.submit:hover {
+            background-color: #45a049; /* Darker green on hover */
+        }
+        button.submit:disabled {
+            background-color: #b56565; /* Light gray for disabled state */
+            color: #fff; /* Keep text white for contrast */
+            cursor: not-allowed; /* Change cursor to indicate it's not clickable */
+            opacity: 0.7; /* Optional: reduce opacity for a softer look */
+        }
+        .icon {
+            width: 12px; /* Set a consistent size for icons */
+            vertical-align: middle; /* Align icons with text */
+            background-color: #fefefe; /* Semi-transparent white background */
+            border-radius: 3px; /* Rounded corners */
+            padding: 5px; /* Padding around the icon */
+            margin: 1px;
+        }
+        ol {
+            padding-left: 20px; /* Indent the list */
+            margin: 10px 0; /* Add spacing around the list */
+        }
+        .tooltip {
+            visibility: hidden; /* Hidden by default */
+            width: 200px; /* Set a width for the tooltip */
+            background-color: rgba(0, 0, 0, 0.90); /* Dark background with some transparency */
+            color: #fff; /* White text */
+            text-align: center; /* Center the text */
+            border-radius: 5px; /* Rounded corners */
+            padding: 5px; /* Padding */
+            position: absolute; /* Position the tooltip */
+            z-index: 1; /* Ensure the tooltip is above other elements */
+            bottom: 100%; /* Position it above the button */
+            left: 50%; /* Center it horizontally */
+            transform: translateX(-50%); /* Center the tooltip */
+            opacity: 0; /* Initially hidden */
+            transition: opacity 0.3s; /* Smooth fade-in */
+        }
+
+        button[disabled]:hover + .tooltip {
+            visibility: visible; /* Show the tooltip when hovering over the disabled button */
+            opacity: 1; /* Fade in */
+        }
+
+        .toggle-button {
+            background-color: #888; /* Default background color */
+            color: white; /* Text color */
+            cursor: pointer; /* Pointer cursor */
+            transition: background-color 0.3s; /* Smooth transition */
+        }
+
+        .toggle-button:hover {
+            background-color: #777; /* Darker gray on hover */
+        }
+
+        .toggle-button.selected {
+            background-color: #4caf50; /* Highlight color for selected button */
+            color: white; /* White text */
+        }
+
+        /* Position the GitHub icon */
+        .github-icon {
+            position: fixed; /* Fix position */
+            bottom: 20px; /* Position from the bottom */
+            right: 20px; /* Position from the right */
+            width: 40px; /* Set the width of the icon */
+            height: 40px; /* Set the height of the icon */
+            background-color: #333; /* Dark background for contrast */
+            border-radius: 50%; /* Circular icon */
+            display: flex; /* Flexbox for centering */
+            justify-content: center; /* Center content horizontally */
+            align-items: center; /* Center content vertically */
+        }
+
+        .github-icon img {
+            width: 80%; /* Make the icon fill the button */
+            height: auto; /* Maintain aspect ratio */
+            background-color: #fefefe; /* Semi-transparent white background */
+            border-radius: 3px; /* Rounded corners */
+            padding: 5px; /* Padding around the icon */
+            margin: 1px;
+        }
+
+        /* Dark mode map */
+        .leaflet-layer,
+        .leaflet-control-zoom-in,
+        .leaflet-control-zoom-out,
+        .leaflet-control-attribution {
+            filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);
+        }
+    </style>
+</head>
+<body>
+<div id="map"></div>
+<div id="sidebar">
+    <h1>OpenPathCL</h1>
+    <hr>
+
+    <div id="input">
+        <h2>Set your Input</h2>
+        <ol>
+            <li>
+                Select your start and end by clicking on <img src="images/marker.svg" alt="Marker Icon" class="icon"/>
+            </li>
+            <li>
+                Select a Bounding Box:
+                <ul>
+                    <li> <img src="images/polygon.svg" alt="Polygon Icon" class="icon"/> for as a polygon </li>
+                    <li> <img src="images/rectangle.svg" alt="Rectangle Icon" class="icon"/> for as a rectangle </li>
+                </ul>
+            </li>
+            <li>
+                Calculate a path by clicking <strong>Send Data</strong>.
+            </li>
+        </ol>
+        <br>
+
+        <h2>Reset Inputs</h2>
+        <button id="clearPoints">Clear Points</button>
+        <button id="clearArea">Clear Area</button>
+
+        <h2>Select Algorithm</h2>
+        <div id="toggleButtons">
+            <button id="btnParallel" class="toggle-button selected">Parallel</button>
+            <button id="btnSerial" class="toggle-button">Serial</button>
+        </div>
+
+        <script>
+            // Get the button elements
+            const btnParallel = document.getElementById('btnParallel');
+            const btnSerial = document.getElementById('btnSerial');
+
+            // Add click event listeners to both buttons
+            btnParallel.addEventListener('click', () => {
+                btnParallel.classList.add('selected'); // Add 'selected' class to Parallel
+                btnSerial.classList.remove('selected'); // Remove 'selected' class from Serial
+            });
+
+            btnSerial.addEventListener('click', () => {
+                btnSerial.classList.add('selected'); // Add 'selected' class to Serial
+                btnParallel.classList.remove('selected'); // Remove 'selected' class from Parallel
+            });
+        </script>
+
+    </div>
+
+    <hr>
+
+    <br>
+    <div style="position: relative; display: inline-block;">
+        <button class="submit" id="sendData" disabled>Send Data</button>
+        <span class="tooltip">Select two points inside a bounding box to plan your route.</span>
+    </div>
+
+
+    <a href="https://github.com/roy-myr/OpenPathCL" target="_blank" class="github-icon" title="View this Code on GitHub">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/9/91/Octicons-mark-github.svg" alt="GitHub Icon" />
+    </a>
+
+</div>
+
+
+
+<script>
+    // Initialize the map
+    var map = L.map('map').setView([53.75383, 9.67194], 13); // Example coordinates
+
+    // Add a tile layer
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: 'Map data © OpenStreetMap contributors',
+    }).addTo(map);
+
+    // Add a feature group to store drawn items (markers, shapes)
+    var drawnItems = new L.FeatureGroup();
+    map.addLayer(drawnItems);
+
+    // Add drawing controls to allow markers, rectangles, and polygons
+    var drawControl = new L.Control.Draw({
+        position: 'topright',
+        draw: {
+            polyline: false,
+            polygon: true,
+            circle: false,
+            circlemarker: false,
+            marker: true,  // Enable marker drawing
+            rectangle: true, // Enable rectangle drawing
+        },
+        edit: {
+            featureGroup: drawnItems,
+            remove: true // Allow editing or removing drawn shapes and markers
+        }
+    });
+    map.addControl(drawControl);
+
+    // Store the drawn shape and selected markers
+    var drawnShape = null;
+    var startPointMarker = null;
+    var endPointMarker = null;
+
+    // Handle shape draw creation event (shape or marker)
+    map.on('draw:created', function (e) {
+        if (e.layerType === 'marker') {
+            handleMarkerPlacement(e.layer);  // Handle marker placement
+        } else {
+            if (drawnShape) {
+                drawnItems.removeLayer(drawnShape); // Remove existing shapes
+            }
+            drawnShape = e.layer;
+            drawnItems.addLayer(drawnShape); // Add the newly drawn shape
+        }
+
+        // Update the send button state
+        updateSendButtonState();
+    });
+
+    // Handle shape or marker editing event
+    map.on('draw:edited', function () {
+        updateSendButtonState();  // Recheck if markers are inside the shape
+    });
+
+    // Handle deletion of markers or shapes
+    map.on('draw:deleted', function (e) {
+        e.layers.eachLayer(function (layer) {
+            // Check if start or end point markers were deleted and reset them
+            if (layer === startPointMarker) {
+                startPointMarker = null;
+            }
+            if (layer === endPointMarker) {
+                endPointMarker = null;
+            }
+            if (layer === drawnShape) {
+                drawnShape = null;
+            }
+        });
+
+        // Update the button state after deletion
+        updateSendButtonState();
+    });
+
+    // Function to handle the placement of start and end markers
+    function handleMarkerPlacement(marker) {
+        if (!startPointMarker) {
+            // If no start point is set, set this marker as the start point
+            startPointMarker = marker;
+            drawnItems.addLayer(startPointMarker); // Add marker to the feature group
+        } else if (!endPointMarker) {
+            // If no end point is set, set this marker as the end point
+            endPointMarker = marker;
+            drawnItems.addLayer(endPointMarker); // Add marker to the feature group
+        } else {
+            // If both markers are already set, prevent adding more markers
+            marker.remove();
+            return;
+        }
+
+        // Update the send button state after placing markers
+        updateSendButtonState();
+    }
+
+    // Function to update the state of the "Send Data" button
+    function updateSendButtonState() {
+        var sendDataButton = document.getElementById('sendData');
+
+        // Check if markers are inside the drawn shape
+        var markersInsideShape = startPointMarker && endPointMarker && drawnShape &&
+            isMarkerInsideShape(startPointMarker) && isMarkerInsideShape(endPointMarker);
+
+        if (drawnShape && startPointMarker && endPointMarker && markersInsideShape) {
+            sendDataButton.disabled = false; // Enable the button if all conditions are met
+        } else {
+            sendDataButton.disabled = true; // Disable the button otherwise
+        }
+    }
+
+    // Function to check if a marker is inside the drawn shape
+    function isMarkerInsideShape(marker) {
+        if (!drawnShape) return false;
+
+        var markerLatLng = marker.getLatLng();
+        if (drawnShape instanceof L.Rectangle) {
+            return drawnShape.getBounds().contains(markerLatLng);
+        } else if (drawnShape instanceof L.Polygon) {
+            return isMarkerInsidePolygon(marker, drawnShape);
+        }
+
+        return false;
+    }
+
+    // Function to check if a marker is inside a polygon
+    function isMarkerInsidePolygon(marker, poly) {
+        var inside = false;
+        var x = marker.getLatLng().lat, y = marker.getLatLng().lng;
+        for (var ii=0;ii<poly.getLatLngs().length;ii++){
+            var polyPoints = poly.getLatLngs()[ii];
+            for (var i = 0, j = polyPoints.length - 1; i < polyPoints.length; j = i++) {
+                var xi = polyPoints[i].lat, yi = polyPoints[i].lng;
+                var xj = polyPoints[j].lat, yj = polyPoints[j].lng;
+
+                var intersect = ((yi > y) != (yj > y))
+                    && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+                if (intersect) inside = !inside;
+            }
+        }
+
+        return inside;
+    }
+
+    // Send data to the backend
+    document.getElementById('sendData').addEventListener('click', function () {
+        if (!drawnShape || !startPointMarker || !endPointMarker) {
+            alert('Please draw a shape and place both start and end points.');
+            return;
+        }
+
+        var data = {
+            bbox: drawnShape instanceof L.Rectangle
+                ? [
+                    drawnShape.getBounds().getNorthWest().lat, drawnShape.getBounds().getNorthWest().lng,
+                    drawnShape.getBounds().getNorthEast().lat, drawnShape.getBounds().getNorthEast().lng,
+                    drawnShape.getBounds().getSouthEast().lat, drawnShape.getBounds().getSouthEast().lng,
+                    drawnShape.getBounds().getSouthWest().lat, drawnShape.getBounds().getSouthWest().lng
+                ]
+                : drawnShape.getLatLngs()[0].flatMap(function (point) {
+                    return [point.lat, point.lng];
+                }), // For polygon, flatten lat/lng array
+            start: [startPointMarker.getLatLng().lat, startPointMarker.getLatLng().lng],
+            dest: [endPointMarker.getLatLng().lat, endPointMarker.getLatLng().lng]
+        };
+
+        // Log the data
+        console.log(data);
+
+        // POST data to backend
+        fetch('YOUR_BACKEND_ENDPOINT', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(data),
+        })
+            .then(response => response.json())
+            .then(data => console.log('Success:', data))
+            .catch((error) => console.error('Error:', error));
+    });
+
+    // Function to clear the area (remove drawn shapes and markers)
+    // Function to clear only the drawn shape (without removing start/end markers)
+    function clearArea() {
+        if (drawnShape) {
+            drawnItems.removeLayer(drawnShape); // Remove only the drawn shape
+            drawnShape = null; // Reset the shape reference
+        }
+        updateSendButtonState(); // Check if the send button should be enabled
+    }
+
+
+    // Add button functionality to clear the area
+    document.getElementById('clearArea').addEventListener('click', clearArea);
+
+    // Function to clear start and end points
+    document.getElementById('clearPoints').addEventListener('click', function () {
+        if (startPointMarker) drawnItems.removeLayer(startPointMarker);
+        if (endPointMarker) drawnItems.removeLayer(endPointMarker);
+        startPointMarker = null;
+        endPointMarker = null;
+        updateSendButtonState(); // Update button state
+    });
+</script>
+</body>
+</html>
