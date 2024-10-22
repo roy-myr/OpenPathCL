@@ -4,8 +4,8 @@ project(OpenPathCL C)
 set(CMAKE_C_STANDARD 11)
 
 # Find OpenCL package and include the directories
-# find_package(OpenCL REQUIRED)
-# include_directories(${OpenCL_INCLUDE_DIRS})
+find_package(OpenCL REQUIRED)
+include_directories(${OpenCL_INCLUDE_DIRS})
 
 # Find CURL package and include the directories
 find_package(CURL REQUIRED)
@@ -13,6 +13,9 @@ include_directories(${CURL_INCLUDE_DIRS})
 
 # Find the cJSON library and include directories
 find_package(cjson REQUIRED)
+
+
+# ------ Serial Version --------
 
 # Add the serial version executable
 add_executable(OpenPathCL_serial
@@ -25,6 +28,9 @@ target_link_libraries(OpenPathCL_serial ${CURL_LIBRARIES})
 
 # Add cJSON to the serial version
 target_link_libraries(OpenPathCL_serial cjson)
+
+
+# ------ Parallel Version --------
 
 # Add the parallel version executable
 add_executable(OpenPathCL_parallel
@@ -40,3 +46,35 @@ target_link_libraries(OpenPathCL_parallel ${OpenCL_LIBRARIES})
 
 # Add cJSON to the parallel version
 target_link_libraries(OpenPathCL_serial cjson)
+
+
+# ------ Webserver --------
+
+# Add the webserver executable
+add_executable(OpenPathCL_webserver
+        src/main_webserver.c)
+
+# Add custom command to convert input_map.html to C header
+add_custom_command(
+        OUTPUT ${CMAKE_SOURCE_DIR}/src/input_map.h
+        COMMAND xxd -i -n input_map_html ${CMAKE_SOURCE_DIR}/src/templates/input_map.html ${CMAKE_SOURCE_DIR}/src/input_map.h
+        DEPENDS ${CMAKE_SOURCE_DIR}/src/templates/input_map.html
+        COMMENT "Embedding input_map.html into input_map.h"
+)
+
+# Include the generated html header file
+add_custom_target(embed_html DEPENDS ${CMAKE_SOURCE_DIR}/src/input_map.h)
+add_dependencies(OpenPathCL_webserver embed_html)
+
+# Add a custom command to convert all the images inside the IMAGES list into one images.h file
+add_custom_command(
+        OUTPUT ${CMAKE_SOURCE_DIR}/src/images.h
+        COMMAND ${CMAKE_COMMAND} -E echo "Generating image header..."
+        COMMAND bash ${CMAKE_SOURCE_DIR}/src/embed_images.sh ${CMAKE_SOURCE_DIR}/src/images.h
+        DEPENDS ${CMAKE_SOURCE_DIR}/src/embed_images.sh
+        COMMENT "Embedding images into images.h"
+)
+
+# Include the generated image header file
+add_custom_target(embed_images DEPENDS ${CMAKE_SOURCE_DIR}/src/images.h)
+add_dependencies(OpenPathCL_webserver embed_images)

@@ -157,6 +157,9 @@
         .leaflet-control-attribution {
             filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);
         }
+        .leaflet-container {
+            background: #000
+        }
     </style>
 </head>
 <body>
@@ -222,7 +225,7 @@
     </div>
 
 
-    <a href="https://github.com/roy-myr/OpenPathCL" target="_blank" class="github-icon" title="View this Code on GitHub">
+    <a href="https://github.com/roy-myr/OpenPathCL" target="_blank" class="github-icon" title="View the Code on GitHub">
         <img src="https://upload.wikimedia.org/wikipedia/commons/9/91/Octicons-mark-github.svg" alt="GitHub Icon" />
     </a>
 
@@ -408,7 +411,7 @@
         console.log(data);
 
         // POST data to backend
-        fetch('YOUR_BACKEND_ENDPOINT', {
+        fetch('/submit', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
