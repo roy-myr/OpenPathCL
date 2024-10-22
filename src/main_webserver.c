@@ -3,6 +3,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <netinet/in.h>
+#include <cjson/cJSON.h>
 
 #include "input_map.h"
 #include "images.h"
@@ -29,37 +30,80 @@ void serve_html(int client_fd) {
 }
 
 void handle_form_submission(int client_fd, char *request_body) {
+
     char response[BUFFER_SIZE];
-    char command[BUFFER_SIZE];
-    char command_output[BUFFER_SIZE];
-    FILE *fp;
 
-    // Assume form data is something like "input=value"
-    char *input_value = strstr(request_body, "input=") + 6;
-
-    // Prepare the command to run the executable with the input
-    snprintf(command, sizeof(command), "./my_executable %s", input_value);
-
-    // Run the command and capture output
-    fp = popen(command, "r");
-    if (fp == NULL) {
-        sprintf(response, "HTTP/1.1 500 Internal Server Error\r\n\r\n");
+    // Check if the request body is valid
+    if (request_body == NULL) {
+        sprintf(response, "HTTP/1.1 400 Bad Request\r\n\r\n");
         send(client_fd, response, strlen(response), 0);
         return;
     }
 
-    // Read command output
-    fgets(command_output, sizeof(command_output), fp);
-    pclose(fp);
+    // Parse JSON data
+    cJSON *json = cJSON_Parse(request_body);
+    if (json == NULL) {
+        sprintf(response, "HTTP/1.1 400 Bad Request\r\n\r\n");
+        send(client_fd, response, strlen(response), 0);
+        return;
+    }
 
-    // Send the HTTP response
-    sprintf(response, "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n");
+    // Extract data from JSON
+    const cJSON *algorithm = cJSON_GetObjectItemCaseSensitive(json, "algorithm");
+    const cJSON *bbox = cJSON_GetObjectItemCaseSensitive(json, "bbox");
+    const cJSON *start = cJSON_GetObjectItemCaseSensitive(json, "start");
+    const cJSON *dest = cJSON_GetObjectItemCaseSensitive(json, "dest");
+
+    // Check if all fields are present
+    if (!cJSON_IsString(algorithm) || !cJSON_IsArray(bbox) ||
+        !cJSON_IsArray(start) || !cJSON_IsArray(dest)) {
+        cJSON_Delete(json);
+        sprintf(response, "HTTP/1.1 400 Bad Request\r\n\r\n");
+        send(client_fd, response, strlen(response), 0);
+        return;
+    }
+
+    // Log extracted data
+    printf("Algorithm: %s\n", algorithm->valuestring);
+
+    printf("BBox: ");
+    for (int i = 0; i < cJSON_GetArraySize(bbox); i++) {
+        printf("%f ", cJSON_GetArrayItem(bbox, i)->valuedouble);
+    }
+    printf("\n");
+
+    printf("Start: ");
+    for (int i = 0; i < cJSON_GetArraySize(start); i++) {
+        printf("%f ", cJSON_GetArrayItem(start, i)->valuedouble);
+    }
+    printf("\n");
+
+    printf("Dest: ");
+    for (int i = 0; i < cJSON_GetArraySize(dest); i++) {
+        printf("%f ", cJSON_GetArrayItem(dest, i)->valuedouble);
+    }
+    printf("\n");
+
+    // Prepare a response
+    sprintf(response, "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n");
     send(client_fd, response, strlen(response), 0);
 
-    // Send a simple HTML response with the command output
-    sprintf(response, "<html><body><h1>Command Output</h1><p>%s</p></body></html>", command_output);
-    send(client_fd, response, strlen(response), 0);
+    // Prepare JSON response
+    cJSON *json_response = cJSON_CreateObject();
+    cJSON_AddStringToObject(json_response, "status", "success");
+    char *json_string = cJSON_Print(json_response);
+
+    // Send the JSON response
+    send(client_fd, json_string, strlen(json_string), 0);
+
+    // Cleanup
+    free(json_string);
+    cJSON_Delete(json_response);
+    cJSON_Delete(json);
+
+    fflush(stdout);
 }
+
 
 void handle_client(int client_fd) {
     char buffer[BUFFER_SIZE] = {0};

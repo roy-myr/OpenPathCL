@@ -78,3 +78,6 @@ add_custom_command(
 # Include the generated image header file
 add_custom_target(embed_images DEPENDS ${CMAKE_SOURCE_DIR}/src/images.h)
 add_dependencies(OpenPathCL_webserver embed_images)
+
+# Add cJSON to the webserver
+target_link_libraries(OpenPathCL_webserver cjson)
