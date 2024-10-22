@@ -232,7 +232,11 @@
 
 <script>
     // Initialize the map
-    var map = L.map('map').setView([53.75383, 9.67194], 13); // Example coordinates
+    // Initialize the map with max zoom level
+    var map = L.map('map', {
+        minZoom: 11 // Set your desired maximum zoom level
+    }).setView([53.75383, 9.67194], 13); // Nordakademie coordinates
+
 
     // Add a tile layer
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -381,7 +385,11 @@
             return;
         }
 
+        // Determine the selected algorithm
+        const selectedAlgorithm = btnParallel.classList.contains('selected') ? 'parallel' : 'serial';
+
         var data = {
+            algorithm: selectedAlgorithm,  // Add the selected algorithm here
             bbox: drawnShape instanceof L.Rectangle
                 ? [
                     drawnShape.getBounds().getNorthWest().lat, drawnShape.getBounds().getNorthWest().lng,
