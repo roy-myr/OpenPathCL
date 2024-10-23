@@ -188,10 +188,26 @@ void handle_form_submission(int client_fd, char *request_body) {
     // Null-terminate the argument list for execvp
     args[arg_idx] = NULL;
 
+    // Create a pipe to capture the output of the external program
+    int pipefd[2];
+    if (pipe(pipefd) == -1) {
+        perror("pipe failed");
+        sprintf(response, "HTTP/1.1 500 Internal Server Error\r\n\r\nPipe creation failed.");
+        send(client_fd, response, strlen(response), 0);
+        return;
+    }
+
     // Fork a child process to execute the external program
     pid_t pid = fork();
     if (pid == 0) {
         // In child process
+        close(pipefd[0]);  // Close the read end of the pipe
+
+        // Redirect stdout to the write end of the pipe
+        dup2(pipefd[1], STDOUT_FILENO);
+        close(pipefd[1]);  // Close the write end after dup2
+
+        // Execute the external program
         execvp(args[0], args);  // Replace the current process image with the new one
 
         // If execvp returns, there was an error
@@ -205,22 +221,36 @@ void handle_form_submission(int client_fd, char *request_body) {
         return;
     } else {
         // In parent process, wait for the child process to complete
+        close(pipefd[1]);  // Close the write end of the pipe
         int status;
+
+        // Wait for the child process to finish
         waitpid(pid, &status, 0);
 
         // Check if the program executed successfully
         if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
-            // Success, respond to client
-            printf("Successfully exited with response: %s\n", response);
-            fflush(stdout);
-            sprintf(response, "HTTP/1.1 200 OK\r\n\r\nExecution completed successfully.");
+            // Success: capture the output from the pipe
+            char buffer[BUFFER_SIZE];
+            ssize_t count = read(pipefd[0], buffer, sizeof(buffer) - 1);
+            if (count > 0) {
+                buffer[count] = '\0';  // Null-terminate the output string
+
+                // Send the response to the client
+                sprintf(response, "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n");
+                send(client_fd, response, strlen(response), 0);
+                send(client_fd, buffer, count, 0);  // Send the captured JSON output
+            } else {
+                // No output or error reading from pipe
+                sprintf(response, "HTTP/1.1 500 Internal Server Error\r\n\r\nFailed to read output.");
+                send(client_fd, response, strlen(response), 0);
+            }
         } else {
             // Error during execution
-            printf("Failed to execute command with error: %s\n", response);
             sprintf(response, "HTTP/1.1 500 Internal Server Error\r\n\r\nExecution failed.");
+            send(client_fd, response, strlen(response), 0);
         }
 
-        send(client_fd, response, strlen(response), 0);
+        close(pipefd[0]);  // Close the read end of the pipe
     }
 
     // Clean up

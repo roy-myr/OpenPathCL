@@ -74,6 +74,29 @@
             cursor: not-allowed; /* Change cursor to indicate it's not clickable */
             opacity: 0.7; /* Optional: reduce opacity for a softer look */
         }
+        /* Position the GitHub icon */
+        .github-icon {
+            position: fixed; /* Fix position */
+            bottom: 20px; /* Position from the bottom */
+            right: 20px; /* Position from the right */
+            width: 40px; /* Set the width of the icon */
+            height: 40px; /* Set the height of the icon */
+            background-color: #333; /* Dark background for contrast */
+            border-radius: 50%; /* Circular icon */
+            display: flex; /* Flexbox for centering */
+            justify-content: center; /* Center content horizontally */
+            align-items: center; /* Center content vertically */
+        }
+
+        .github-icon img {
+            width: 80%; /* Make the icon fill the button */
+            height: auto; /* Maintain aspect ratio */
+            background-color: #fefefe; /* Semi-transparent white background */
+            border-radius: 3px; /* Rounded corners */
+            padding: 5px; /* Padding around the icon */
+            margin: 1px;
+        }
+
         /* Loading screen styles */
         #loading {
             display: none; /* Hidden by default */
@@ -156,6 +179,10 @@
         <button class="submit" id="home" onclick="location.reload()">Next Request</button>
     </div>
 </div>
+
+<a href="https://github.com/roy-myr/OpenPathCL" target="_blank" class="github-icon" title="View the Code on GitHub">
+    <img src="https://upload.wikimedia.org/wikipedia/commons/9/91/Octicons-mark-github.svg" alt="GitHub Icon" />
+</a>
 
 <!-- Loading screen -->
 <div id="loading">Running the Algorithm... <br> This can take a while, please wait...</div>
