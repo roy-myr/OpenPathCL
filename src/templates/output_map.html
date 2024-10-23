@@ -170,50 +170,34 @@
     <hr>
 
     <div id="content">
-        <h2>Set your Input</h2>
-        <ol>
+        <h2>Your Input</h2>
+        <ul>
             <li>
-                Select your start and end by clicking on <img src="images/marker.svg" alt="Marker Icon" class="icon"/>
+                Start: Node 289358677 <br> (53.756993, 9.674079)
             </li>
             <li>
-                Select a Bounding Box:
-                <ul>
-                    <li> <img src="images/polygon.svg" alt="Polygon Icon" class="icon"/> for as a polygon </li>
-                    <li> <img src="images/rectangle.svg" alt="Rectangle Icon" class="icon"/> for as a rectangle </li>
-                </ul>
+                Destination: Node 2161773935 <br> (53.737119, 9.682785)
             </li>
-            <li>
-                Calculate a path by clicking <strong>Send Data</strong>.
-            </li>
-        </ol>
+        </ul>
         <br>
 
-        <h2>Reset Inputs</h2>
-        <button id="clearPoints">Clear Points</button>
-        <button id="clearArea">Clear Area</button>
-
-        <h2>Select Algorithm</h2>
-        <div id="toggleButtons">
-            <button id="btnParallel" class="toggle-button selected">Parallel</button>
-            <button id="btnSerial" class="toggle-button">Serial</button>
-        </div>
-
-        <script>
-            // Get the button elements
-            const btnParallel = document.getElementById('btnParallel');
-            const btnSerial = document.getElementById('btnSerial');
-
-            // Add click event listeners to both buttons
-            btnParallel.addEventListener('click', () => {
-                btnParallel.classList.add('selected'); // Add 'selected' class to Parallel
-                btnSerial.classList.remove('selected'); // Remove 'selected' class from Serial
-            });
-
-            btnSerial.addEventListener('click', () => {
-                btnSerial.classList.add('selected'); // Add 'selected' class to Serial
-                btnParallel.classList.remove('selected'); // Remove 'selected' class from Parallel
-            });
-        </script>
+        <h2>Results</h2>
+        <ul>
+            <li>
+                Algorithm: Serial
+            </li>
+            <li>
+                Nodes in Bounding Box: 46457
+            </li>
+            <li>
+                Execution Time: 2m42s
+            </li>
+            <li>
+                Length of your Route: 2818.56m
+            </li>
+        </ul>
+        <br>
+        <button id="overpassLink" onclick="location.href='overpassLink'">See Nodes</button>
 
     </div>
 
@@ -221,8 +205,7 @@
 
     <br>
     <div style="position: relative; display: inline-block;">
-        <button class="submit" id="sendData" disabled>Send Data</button>
-        <span class="tooltip">Select two points inside a bounding box to plan your route.</span>
+        <button class="submit" id="home" onclick="location.href='/'">Next Request</button>
     </div>
 
 
