@@ -11,6 +11,7 @@
 
 #define PORT 5050
 #define BUFFER_SIZE 4096
+#define PATH_MAX 1024
 
 void serve_image(int client_fd, const char *image_name, unsigned char *image_data, unsigned int image_len, const char *content_type) {
     char response[BUFFER_SIZE];
@@ -28,6 +29,17 @@ void serve_html(int client_fd, const char *html_content, size_t content_length) 
 
     // Send the embedded HTML content
     send(client_fd, html_content, content_length, 0);
+}
+
+// Function to get the current working dir
+char *get_current_directory() {
+    static char cwd[PATH_MAX];
+    if (getcwd(cwd, sizeof(cwd)) != NULL) {
+        return cwd;
+    } else {
+        perror("getcwd() error");
+        return NULL;
+    }
 }
 
 void handle_form_submission(int client_fd, char *request_body) {
@@ -79,16 +91,148 @@ void handle_form_submission(int client_fd, char *request_body) {
         return;
     }
 
-    // Serve output_map.html with the received data
-    sprintf(response, "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n");
-    send(client_fd, response, strlen(response), 0);
+    // determine the path of the programm
+    const char *program_name = NULL;
+    char full_program_path[PATH_MAX];
+    char *cwd = get_current_directory();
+    if (cwd == NULL) {
+        sprintf(response, "HTTP/1.1 500 Internal Server Error\r\n\r\nFailed to determine current directory.");
+        send(client_fd, response, strlen(response), 0);
+        return;
+    }
 
-    // Send the output_map.html content
-    // Note: Make sure you have defined output_map_html and output_map_html_len
-    send(client_fd, output_map_html, output_map_html_len, 0);
+    // Construct the full path to the executable
+    if (strcmp(algorithm->valuestring, "parallel") == 0) {
+        snprintf(full_program_path, PATH_MAX, "%s/OpenPathCL_parallel", cwd);
+    } else if (strcmp(algorithm->valuestring, "serial") == 0) {
+        snprintf(full_program_path, PATH_MAX, "%s/OpenPathCL_serial", cwd);
+    } else {
+        printf("Invalid algorithm specified.\n");
+        fflush(stdout);
+        cJSON_Delete(json);
+        sprintf(response, "HTTP/1.1 400 Bad Request\r\n\r\n");
+        send(client_fd, response, strlen(response), 0);
+        return;
+    }
+
+    // Calculate the number of arguments
+    int bbox_size = cJSON_GetArraySize(bbox);
+    int num_args = 4 + bbox_size;  // start(2), dest(2), bbox(n), plus the program name
+
+    // Allocate memory for the argument array dynamically
+    char **args = malloc((num_args + 2) * sizeof(char *));  // +2 for program name and NULL termination
+    int arg_idx = 0;
+
+    // First argument: Program name (with full path)
+    args[arg_idx++] = strdup(full_program_path);
+
+    // Add start coordinates
+    cJSON *start_lat = cJSON_GetArrayItem(start, 0);
+    cJSON *start_lng = cJSON_GetArrayItem(start, 1);
+    if (cJSON_IsNumber(start_lat) && cJSON_IsNumber(start_lng)) {
+        char start_lat_str[20], start_lng_str[20];
+        sprintf(start_lat_str, "%f", start_lat->valuedouble);
+        sprintf(start_lng_str, "%f", start_lng->valuedouble);
+
+        args[arg_idx++] = strdup(start_lat_str);
+        args[arg_idx++] = strdup(start_lng_str);
+    } else {
+        printf("Invalid start coordinates.\n");
+        fflush(stdout);
+        cJSON_Delete(json);
+        sprintf(response, "HTTP/1.1 400 Bad Request\r\n\r\n");
+        send(client_fd, response, strlen(response), 0);
+        free(args);
+        return;
+    }
+
+    // Add destination coordinates
+    cJSON *dest_lat = cJSON_GetArrayItem(dest, 0);
+    cJSON *dest_lng = cJSON_GetArrayItem(dest, 1);
+    if (cJSON_IsNumber(dest_lat) && cJSON_IsNumber(dest_lng)) {
+        char dest_lat_str[20], dest_lng_str[20];
+        sprintf(dest_lat_str, "%f", dest_lat->valuedouble);
+        sprintf(dest_lng_str, "%f", dest_lng->valuedouble);
+
+        args[arg_idx++] = strdup(dest_lat_str);
+        args[arg_idx++] = strdup(dest_lng_str);
+    } else {
+        printf("Invalid destination coordinates.\n");
+        fflush(stdout);
+        cJSON_Delete(json);
+        sprintf(response, "HTTP/1.1 400 Bad Request\r\n\r\n");
+        send(client_fd, response, strlen(response), 0);
+        free(args);
+        return;
+    }
+
+    // Add bounding box coordinates
+    for (int i = 0; i < bbox_size; i++) {
+        cJSON *bbox_coord = cJSON_GetArrayItem(bbox, i);
+        if (cJSON_IsNumber(bbox_coord)) {
+            char bbox_coord_str[20];
+            sprintf(bbox_coord_str, "%f", bbox_coord->valuedouble);
+
+            args[arg_idx++] = strdup(bbox_coord_str);
+        } else {
+            printf("Invalid bounding box coordinates.\n");
+            fflush(stdout);
+            cJSON_Delete(json);
+            sprintf(response, "HTTP/1.1 400 Bad Request\r\n\r\n");
+            send(client_fd, response, strlen(response), 0);
+            free(args);
+            return;
+        }
+    }
+
+    // Null-terminate the argument list for execvp
+    args[arg_idx] = NULL;
+
+    // Fork a child process to execute the external program
+    pid_t pid = fork();
+    if (pid == 0) {
+        // In child process
+        execvp(args[0], args);  // Replace the current process image with the new one
+
+        // If execvp returns, there was an error
+        perror("execvp failed");
+        exit(EXIT_FAILURE);
+    } else if (pid < 0) {
+        // Fork failed
+        perror("fork failed");
+        sprintf(response, "HTTP/1.1 500 Internal Server Error\r\n\r\n");
+        send(client_fd, response, strlen(response), 0);
+        return;
+    } else {
+        // In parent process, wait for the child process to complete
+        int status;
+        waitpid(pid, &status, 0);
+
+        // Check if the program executed successfully
+        if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
+            // Success, respond to client
+            printf("Successfully exited with response: %s\n", response);
+            fflush(stdout);
+            sprintf(response, "HTTP/1.1 200 OK\r\n\r\nExecution completed successfully.");
+        } else {
+            // Error during execution
+            printf("Failed to execute command with error: %s\n", response);
+            sprintf(response, "HTTP/1.1 500 Internal Server Error\r\n\r\nExecution failed.");
+        }
+
+        send(client_fd, response, strlen(response), 0);
+    }
+
+    // Clean up
+    cJSON_Delete(json);
+    for (int i = 0; i < arg_idx; i++) {
+        free(args[i]);  // Free the dynamically allocated argument strings
+    }
+    free(args);  // Free the argument array
 
     fflush(stdout);
 }
+
 
 void handle_client(int client_fd) {
     char buffer[BUFFER_SIZE] = {0};
@@ -105,7 +249,7 @@ void handle_client(int client_fd) {
         serve_image(client_fd, "rectangle", rectangle, rectangle_len, "image/svg+xml");
     } else if (strstr(buffer, "GET /submit ")) {
         serve_html(client_fd, output_map_html, output_map_html_len);
-    } else if (strstr(buffer, "GET /run ")) {
+    } else if (strstr(buffer, "POST /run ")) {
         // Handle POST request
         // Extract the "Content-Length" header to determine the size of the body
         char *content_length_str = strstr(buffer, "Content-Length: ");
