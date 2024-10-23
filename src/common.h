@@ -34,13 +34,10 @@ void freeNodePath(PathNode* head);
 void displayPathOnMap(PathNode* nodePath);
 
 // Functions for the data import
-long long getClosestNode(double lat, double lon);
+long long getClosestNode(const double* point);
 void getRoadNodes(
-    const double lat1,
-    const double lon1,
-    const double lat2,
-    const double lon2,
-    const double buffer,
+    const double* bbox,
+    const int bbox_size,
     Node** nodes,
     int* nodeCount,
     Road** roads,

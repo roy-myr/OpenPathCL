@@ -260,7 +260,7 @@ static size_t WriteMemoryCallback(const void* contents, const size_t size, size_
 }
 
 // Function to get the closest node to given coordinates
-long long getClosestNode(const double lat, const double lon) {
+long long getClosestNode(const double* point) {
     CURL* curl;
     CURLcode res;
     struct MemoryStruct response;
@@ -278,7 +278,7 @@ long long getClosestNode(const double lat, const double lon) {
             "node(w)->.nodes;"
             "(._;>;);"
             "out body;",
-            lat, lon);
+            point[0], point[1]);
 
         // Set the API endpoint
         curl_easy_setopt(curl, CURLOPT_URL, "https://overpass-api.de/api/interpreter");
@@ -318,7 +318,7 @@ long long getClosestNode(const double lat, const double lon) {
                             double nodeLon = lonNode->valuedouble;
 
                             // Calculate the distance (simple Euclidean distance)
-                            double distance = (lat - nodeLat) * (lat - nodeLat) + (lon - nodeLon) * (lon - nodeLon);
+                            double distance = (point[0] - nodeLat) * (point[0] - nodeLat) + (point[1] - nodeLon) * (point[1] - nodeLon);
                             if (closestDistance < 0 || distance < closestDistance) {
                                 closestDistance = distance;
                                 closestNodeId = id->valuedouble;
@@ -344,15 +344,13 @@ long long getClosestNode(const double lat, const double lon) {
 
 // Function to get road nodes between two coordinates with a buffer
 void getRoadNodes(
-        const double lat1,
-        const double lon1,
-        const double lat2,
-        const double lon2,
-        const double buffer,
+        const double* bbox,
+        const int bbox_size,
         Node** nodes,
         int* nodeCount,
         Road** roads,
         int* roadCount) {
+
     CURL* curl;
     CURLcode res;
     struct MemoryStruct response;
@@ -363,17 +361,30 @@ void getRoadNodes(
     curl = curl_easy_init();
 
     if (curl) {
-        char postData[1024];
-        snprintf(postData, sizeof(postData),
-            "[out:json];"
-            "way[\"highway\"](around:%f,%f,%f,%f,%f);"
-            "out body;>;out skel qt;",
-            buffer, lat1, lon1, lat2, lon2);
-        printf("Request:\n"
-            "[out:json];\n"
-            "way[\"highway\"](around:%f,%f,%f,%f,%f);\n"
-            "out body;>;out skel qt;\n",
-            buffer, lat1, lon1, lat2, lon2);
+        char postData[2048];  // Assuming 2048 bytes is sufficient, adjust as needed
+        char polyBuffer[1024] = {0}; // To hold the polygon (bbox) coordinates
+
+        // Start constructing the Overpass QL query
+        strcpy(postData, "[out:json];way[\"highway\"](poly:\"");
+
+        // Add bbox polygon coordinates to the polyBuffer
+        for (int i = 0; i < bbox_size; i += 2) {
+            char coord[64];  // Buffer for one lat-lon pair
+            snprintf(coord, sizeof(coord), "%f %f ", bbox[i], bbox[i+1]);
+            strncat(polyBuffer, coord, sizeof(polyBuffer) - strlen(polyBuffer) - 1);  // Concatenate each lat-lon pair to the polygon
+        }
+
+        // Close the polygon by appending the first point again (optional)
+        char firstPoint[64];
+        snprintf(firstPoint, sizeof(firstPoint), "%f %f", bbox[0], bbox[1]);
+        strncat(polyBuffer, firstPoint, sizeof(polyBuffer) - strlen(polyBuffer) - 1);
+
+        // Complete the Overpass query string
+        strncat(postData, polyBuffer, sizeof(postData) - strlen(postData) - 1);    // Add the polygon to postData string
+        strncat(postData, "\");out body;>;out skel qt;", sizeof(postData) - strlen(postData) - 1);
+
+        // Debugging print to see the constructed query
+        printf("Constructed Overpass API query:\n%s\n", postData);
 
         // Set the API endpoint
         curl_easy_setopt(curl, CURLOPT_URL, "https://overpass-api.de/api/interpreter");

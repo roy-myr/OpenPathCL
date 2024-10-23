@@ -98,8 +98,6 @@ void handle_form_submission(int client_fd, char *request_body) {
     fflush(stdout);
 }
 
-
-
 void handle_client(int client_fd) {
     char buffer[BUFFER_SIZE] = {0};
     int bytes_read = read(client_fd, buffer, sizeof(buffer));

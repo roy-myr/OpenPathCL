@@ -201,25 +201,30 @@ void dijkstra(
 
 int main() {
     // set the coordinates
-    const double start_lat = 53.753829290390485;
-    const double start_lon = 9.671952540458692;
-    const double destination_lat = 53.54434910428687;
-    const double destination_lon =   9.936003265725867;
+    const double start[2] = {53.75693215197336,9.67449188232422};
+    const double dest[2] = {53.737441882032236,9.68273162841797};
+    const double bbox[8] = {
+        53.76555776977467, 9.666595458984377,
+        53.76555776977467, 9.691486358642578,
+        53.7321617112458, 9.691486358642578,
+        53.7321617112458, 9.666595458984377};
+
+    int bbox_size = sizeof(bbox) / sizeof(bbox[0]);
 
     // initialise curl
     curl_global_init(CURL_GLOBAL_DEFAULT);
 
     // get the nodes closest to the given address
-    long long start_id = getClosestNode(start_lat, start_lon);
+    long long start_id = getClosestNode(start);
     if (start_id == -1) {
-        printf("Couldn't find closest Node to the start coordinates (%f, %f).\n", start_lat, start_lon);
+        printf("Couldn't find closest Node to the start coordinates (%f, %f).\n", start[0], start[1]);
         return 1;
     }
     printf("Start_id: %lld\n", start_id);
 
-    long long destination_id = getClosestNode(destination_lat, destination_lon);
+    long long destination_id = getClosestNode(dest);
     if (destination_id == -1) {
-        printf("Couldn't find closest Node to the destination coordinates (%f, %f).\n", destination_lat, destination_lon);
+        printf("Couldn't find closest Node to the destination coordinates (%f, %f).\n", dest[0], dest[1]);
         return 1;
     }
     printf("Destination_id: %lld\n", destination_id);
@@ -234,11 +239,8 @@ int main() {
 
     // Data import
     getRoadNodes(
-        start_lat,
-        start_lon,
-        destination_lat,
-        destination_lon,
-        3000.00,
+        bbox,
+        bbox_size,
         &nodes,
         &nodeCount,
         &roads,
