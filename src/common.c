@@ -39,15 +39,16 @@ void appendToNodePath(PathNode** head, const Node data) {
 
 // Function to print the path
 void printNodePath(PathNode* head) {
+    printf("\t\"route\": [");
     const PathNode* current = head;
     while (current != NULL) {
-        printf("%lld (%f, %f)", current->data.id, current->data.lat, current->data.lon);
+        printf("[%f, %f]", current->data.lat, current->data.lon);
         if (current->next != NULL) {
-            printf(" <- ");
+            printf(", ");
         }
         current = current->next;
     }
-    printf("\n");
+    printf("],\n");
 }
 
 // Function to free the linked list
@@ -59,85 +60,6 @@ void freeNodePath(PathNode* head) {
         free(current);            // Free the current node
         current = nextNode;       // Move to the next node
     }
-}
-
-// Function to display the path on OpenStreetMap using Leaflet
-void displayPathOnMap(PathNode* nodePath) {
-    // Create an HTML file to display the map
-    FILE *file = fopen("map.html", "w");
-    if (!file) {
-        perror("Failed to open file");
-        return;
-    }
-
-    // Write the HTML content
-    fprintf(file, "<!DOCTYPE html>\n");
-    fprintf(file, "<html>\n");
-    fprintf(file, "<head>\n");
-    fprintf(file, "    <title>Path on OpenStreetMap</title>\n");
-    fprintf(file, "    <meta charset='utf-8' />\n");
-    fprintf(file, "    <meta name='viewport' content='width=device-width, initial-scale=1.0' />\n");
-    fprintf(file, "    <link rel='stylesheet' href='https://unpkg.com/leaflet/dist/leaflet.css' />\n");
-    fprintf(file, "    <style>\n");
-    fprintf(file, "        #map {\n");
-    fprintf(file, "            position: absolute;\n");
-    fprintf(file, "            top: 0;\n");
-    fprintf(file, "            bottom: 0;\n");
-    fprintf(file, "            left: 0;\n");
-    fprintf(file, "            right: 0;\n");
-    fprintf(file, "            overflow: hidden;\n");
-    fprintf(file, "        }\n");
-    fprintf(file, "    </style>\n");
-    fprintf(file, "</head>\n");
-    fprintf(file, "<body>\n");
-    fprintf(file, "    <div id='map'></div>\n");
-    fprintf(file, "    <script src='https://unpkg.com/leaflet/dist/leaflet.js'></script>\n");
-    fprintf(file, "    <script>\n");
-
-    // Initialize the map
-    fprintf(file, "    var map = L.map('map').setView([%f, %f], 13);\n",
-            nodePath->data.lat, nodePath->data.lon);
-
-    // Add OpenStreetMap tile layer
-    fprintf(file, "    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {\n");
-    fprintf(file, "        maxZoom: 19,\n");
-    fprintf(file, "        attribution: '&copy; <a href=\"https://www.openstreetmap.org/copyright\">OpenStreetMap</a> contributors'\n");
-    fprintf(file, "    }).addTo(map);\n");
-
-    // Create a polyline for the path
-    fprintf(file, "    var latlngs = [\n");
-
-    // Write the latitude and longitude to the polyline
-    while (nodePath != NULL) {
-        fprintf(file, "        [%f, %f],\n", nodePath->data.lat, nodePath->data.lon);
-        nodePath = nodePath->next;  // Move to the next node
-    }
-
-    fprintf(file, "    ];\n");
-    fprintf(file, "    var polyline = L.polyline(latlngs, {color: 'red'}).addTo(map);\n");
-
-    // Fit the map to the polyline
-    fprintf(file, "    map.fitBounds(polyline.getBounds());\n");
-    fprintf(file, "</script>\n");
-    fprintf(file, "</body>\n");
-    fprintf(file, "</html>\n");
-
-    fclose(file); // Close the file
-
-    // Open the generated HTML file in the default browser
-    printf("Opening the map in the browser...\n");
-    char command[256];
-
-    // Use the appropriate command based on your operating system
-#ifdef _WIN32
-    sprintf(command, "start map.html"); // For Windows
-#elif __APPLE__
-    sprintf(command, "open map.html"); // For macOS
-#else
-    sprintf(command, "xdg-open map.html"); // For Linux
-#endif
-
-    system(command); // Execute the command
 }
 
 
@@ -228,9 +150,12 @@ void parseAndStoreJSON(const char* jsonResponse, Node** nodes, int* nodeCount, R
             }
         }
     }
-
     // Clean up
     cJSON_Delete(root);
+
+    // Print results
+    printf("\t\"nodesInBoundingBox\": %d,\n", *nodeCount);
+    printf("\t\"roadsInBoundingBox\": %d,\n", *roadCount);
 }
 
 
@@ -263,7 +188,10 @@ static size_t WriteMemoryCallback(const void* contents, const size_t size, size_
 int parseArguments(int argc, char* argv[], double start[2], double dest[2], double** bbox, int* bbox_size) {
     // Check for the required number of arguments
     if (argc < 10 || (argc - 6) % 2 != 1) {
-        printf("Usage: %s start_lat start_lon dest_lat dest_lon bbox_lat1 bbox_lon1 bbox_lat2 bbox_lon2 ...\n", argv[0]);
+        printf("\t\"success\": false,\n"
+               "\t\"error\": \"Invalid Arguments\",\n"
+               "\t\"usage\": \"%s start_lat start_lon dest_lat dest_lon bbox_lat1 bbox_lon1 bbox_lat2 bbox_lon2 ...\"\n"
+               "}\n", argv[0]);
         return -1; // Indicate an error
     }
 
@@ -286,7 +214,7 @@ int parseArguments(int argc, char* argv[], double start[2], double dest[2], doub
     }
 
     // Parse bounding box coordinates
-    for (int i = 0; i < *bbox_size; ++i) {
+    for (int i = 0; i < *bbox_size + 1; ++i) {
         (*bbox)[i] = strtod(argv[5 + i], NULL);
     }
 
@@ -308,7 +236,7 @@ long long getClosestNode(const double* point) {
         char postData[512];
         snprintf(postData, sizeof(postData),
             "[out:json];"
-            "way(around:50,%f,%f)[\"highway\"];"
+            "way(around:50,%f,%f)['highway'];"
             "node(w)->.nodes;"
             "(._;>;);"
             "out body;",
@@ -399,26 +327,21 @@ void getRoadNodes(
         char polyBuffer[1024] = {0}; // To hold the polygon (bbox) coordinates
 
         // Start constructing the Overpass QL query
-        strcpy(postData, "[out:json];way[\"highway\"](poly:\"");
+        strcpy(postData, "[out:json];way['highway'](poly:'");
 
         // Add bbox polygon coordinates to the polyBuffer
         for (int i = 0; i < bbox_size; i += 2) {
             char coord[64];  // Buffer for one lat-lon pair
-            snprintf(coord, sizeof(coord), "%f %f ", bbox[i], bbox[i+1]);
+            snprintf(coord, sizeof(coord), " %f %f", bbox[i], bbox[i+1]);
             strncat(polyBuffer, coord, sizeof(polyBuffer) - strlen(polyBuffer) - 1);  // Concatenate each lat-lon pair to the polygon
         }
 
-        // Close the polygon by appending the first point again (optional)
-        char firstPoint[64];
-        snprintf(firstPoint, sizeof(firstPoint), "%f %f", bbox[0], bbox[1]);
-        strncat(polyBuffer, firstPoint, sizeof(polyBuffer) - strlen(polyBuffer) - 1);
-
         // Complete the Overpass query string
         strncat(postData, polyBuffer, sizeof(postData) - strlen(postData) - 1);    // Add the polygon to postData string
-        strncat(postData, "\");out body;>;out skel qt;", sizeof(postData) - strlen(postData) - 1);
+        strncat(postData, "');out body;>;out skel qt;", sizeof(postData) - strlen(postData) - 1);
 
         // Debugging print to see the constructed query
-        printf("Constructed Overpass API query:\n%s\n", postData);
+        printf("\t\"nodesRequest\": \"http://overpass-turbo.eu/?Q=%s\",\n", postData);
 
         // Set the API endpoint
         curl_easy_setopt(curl, CURLOPT_URL, "https://overpass-api.de/api/interpreter");

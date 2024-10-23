@@ -79,23 +79,8 @@ int minDistance(const int vertices, double dist[], bool visited_map[]) {
     return min_index;
 }
 
-void printDijkstraState(int vertices, const bool visited_map[], const double dist[], const int prev[]) {
-    printf("| Vertex | Visited | Distance | Previous |\n");
-    printf("|--------|---------|----------|----------|\n");
-
-    for (int i = 0; i < vertices; i++) {
-        printf("| %6d | %7s | %8.2f | %8d |\n",
-            i,
-            visited_map[i] ? "True" : "False",
-            dist[i] == INF ? -1 : dist[i], // Print -1 if distance is INF
-            prev[i]);
-    }
-
-    printf("\n"); // Extra line for separation
-}
-
 // Dijkstra's single-source shortest path algorithm with structs
-void dijkstra(
+int dijkstra(
         const int vertices,
         double **graph,
         Node nodes[],
@@ -117,12 +102,12 @@ void dijkstra(
         }
     }
 
-    printf("Start and dest: %lld (%d), %lld (%d)\n", start_id, start, destination_id, destination);
-
     // If the source or target doesn't exist, exit the function
     if (start == -1 || destination == -1) {
-        printf("Invalid source or target ID.\n");
-        return;
+        printf("\t\"success\": false,\n"
+               "\t\"error\": \"Invalid source or target ID\"\n"
+               "}");
+        return -1;
     }
 
     // Initialize all distances as INFINITE and visited_map[] as false
@@ -143,7 +128,6 @@ void dijkstra(
         // check if a vertices was found
         if (u == -1) {
             // All remaining vertices are inaccessible from source
-            printf("Couldn't find a vertices with minimal distance. Terminate the program.\n");
             break;
         }
 
@@ -189,17 +173,21 @@ void dijkstra(
             current = prev[current]; // Move to the previous node
         }
 
-        printf("Shortest distance from ID %lld to ID %lld is %.2fm\n", start_id, destination_id, dist[destination]);
-        printf("Path: ");
+        printf("\t\"routeLength\": \"%.2fm\",\n", dist[destination]);
         printNodePath(nodePath); // Print the nodePath
-        displayPathOnMap(nodePath);  // Display the Path on a Map
         freeNodePath(nodePath);   // Free the allocated memory for the nodePath
-    } else {
-        printf("Target %lld cannot be reached from source %lld\n", destination_id, start_id);
+        return 0;
     }
+    printf("\t\"success\": false,\n"
+           "\t\"error\": \"Target %lld cannot be reached from source %lld\n\""
+           "}", destination_id, start_id);
+    return -1;
 }
 
 int main(int argc, char *argv[]) {
+    // Start the Response JSON
+    printf("{\n");
+
     // define arrays for start and destination
     double start[2];   // Array for starting coordinates
     double dest[2];    // Array for destination coordinates
@@ -217,17 +205,21 @@ int main(int argc, char *argv[]) {
     // get the nodes closest to the given address
     long long start_id = getClosestNode(start);
     if (start_id == -1) {
-        printf("Couldn't find closest Node to the start coordinates (%f, %f).\n", start[0], start[1]);
+        printf("\t\"success\": false,\n"
+               "\t\"error\": \"Couldn't find closest Node to the start coordinates (%f, %f).\"\n"
+               "}\n", start[0], start[1]);
         return 1;
     }
-    printf("Start_id: %lld\n", start_id);
+    printf("\t\"startNode\": %lld,\n", start_id);
 
     long long destination_id = getClosestNode(dest);
     if (destination_id == -1) {
-        printf("Couldn't find closest Node to the destination coordinates (%f, %f).\n", dest[0], dest[1]);
+        printf("\t\"success\": false,\n"
+               "\t\"error\": \"Couldn't find closest Node to the destination coordinates (%f, %f).\"\n"
+               "}\n", dest[0], dest[1]);
         return 1;
     }
-    printf("Destination_id: %lld\n", destination_id);
+    printf("\t\"destNode\": %lld,\n", destination_id);
 
     // Initialise nodes Array and nodeCount
     Node* nodes = NULL;
@@ -249,22 +241,6 @@ int main(int argc, char *argv[]) {
     // end curl
     curl_global_cleanup();
 
-    /*
-    printf("Nodes: %d\n", nodeCount);
-    for (int i = 0; i < nodeCount; i++) {
-        printf("Index: %d, ID: %lld, Latitude: %.7f, Longitude: %.7f\n",
-                nodes[i].index, nodes[i].id, nodes[i].lat, nodes[i].lon);
-    }
-    printf("Roads: %d\n", roadCount);
-    for (int i = 0; i < roadCount; i++) {
-        printf("Index: %lld, Nodes: [\n", roads[i].id);
-        for (int j = 0; j < roads[i].nodeCount; j++) {
-            printf("    Node%d: %lld\n", j, roads[i].nodes[j]);
-        }
-        printf("]\n");
-    }
-    //*/
-
     // Define the Graph
     double **graph = malloc(nodeCount * sizeof(double *));
     for (int i = 0; i < nodeCount; i++) {
@@ -275,28 +251,21 @@ int main(int argc, char *argv[]) {
     // Fill the Graph using the Roads Data
     fillGraph(graph, nodeCount, nodes, roads, roadCount);
 
-    /*/ Print the Graph for testing
-    printf("{");
-    for (int i = 0; i < nodeCount; i++) {
-        printf("%d: [", i);
-        for (int j = 0; j < nodeCount; j++) {
-            printf("%.f, ",
-                graph[i][j] == INF ? -1 : graph[i][j]);
-        }
-        printf("]\n");
-    }
-    printf("}\n");//*/
-
     // ToDo: look if the start and dest are actually inside the node
 
     // Run Dijkstra's algorithm with the source and target IDs
-    dijkstra(nodeCount, graph, nodes, start_id, destination_id);
+    if (dijkstra(nodeCount, graph, nodes, start_id, destination_id) != 0) {
+        return 1;
+    }
 
     // free the graph
     for (int i = 0; i < nodeCount; i++) {
         free(graph[i]);
     }
     free(graph);
+
+    // End the Response JSON
+    printf("\t\"success\": true\n}\n");
 
     return 0;
 }
