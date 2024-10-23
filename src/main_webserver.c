@@ -6,6 +6,7 @@
 #include <cjson/cJSON.h>
 
 #include "input_map.h"
+#include "output_map.h"
 #include "images.h"
 
 #define PORT 5050
@@ -18,15 +19,15 @@ void serve_image(int client_fd, const char *image_name, unsigned char *image_dat
     send(client_fd, image_data, image_len, 0);
 }
 
-void serve_html(int client_fd) {
+void serve_html(int client_fd, const char *html_content, size_t content_length) {
     char response[BUFFER_SIZE];
 
     // Send HTTP headers
-    sprintf(response, "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n");
+    sprintf(response, "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: %zu\r\n\r\n", content_length);
     send(client_fd, response, strlen(response), 0);
 
     // Send the embedded HTML content
-    send(client_fd, input_map_html, input_map_html_len, 0);
+    send(client_fd, html_content, content_length, 0);
 }
 
 void handle_form_submission(int client_fd, char *request_body) {
@@ -61,10 +62,10 @@ void handle_form_submission(int client_fd, char *request_body) {
 
     // Log the extracted fields
     printf("Extracted JSON fields: algorithm=%s, bbox size=%d, start size=%d, dest size=%d\n",
-            algorithm ? algorithm->valuestring : "NULL",
-            cJSON_GetArraySize(bbox),
-            cJSON_GetArraySize(start),
-            cJSON_GetArraySize(dest));
+           algorithm ? algorithm->valuestring : "NULL",
+           cJSON_GetArraySize(bbox),
+           cJSON_GetArraySize(start),
+           cJSON_GetArraySize(dest));
     fflush(stdout);
 
     // Check if all fields are present
@@ -78,22 +79,13 @@ void handle_form_submission(int client_fd, char *request_body) {
         return;
     }
 
-    // Prepare a response
-    sprintf(response, "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n");
+    // Serve output_map.html with the received data
+    sprintf(response, "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n");
     send(client_fd, response, strlen(response), 0);
 
-    // Prepare JSON response
-    cJSON *json_response = cJSON_CreateObject();
-    cJSON_AddStringToObject(json_response, "status", "success");
-    char *json_string = cJSON_Print(json_response);
-
-    // Send the JSON response
-    send(client_fd, json_string, strlen(json_string), 0);
-
-    // Cleanup
-    free(json_string);
-    cJSON_Delete(json_response);
-    cJSON_Delete(json);
+    // Send the output_map.html content
+    // Note: Make sure you have defined output_map_html and output_map_html_len
+    send(client_fd, output_map_html, output_map_html_len, 0);
 
     fflush(stdout);
 }
@@ -102,19 +94,18 @@ void handle_client(int client_fd) {
     char buffer[BUFFER_SIZE] = {0};
     int bytes_read = read(client_fd, buffer, sizeof(buffer));
 
-    // Print entire request for debugging
-    printf("Request:\n%s\n", buffer);
-
     // Check if it's a GET request for serving images or HTML
     if (strstr(buffer, "GET / ")) {
-        serve_html(client_fd);
+        serve_html(client_fd, input_map_html, input_map_html_len);
     } else if (strstr(buffer, "GET /images/marker.svg ")) {
         serve_image(client_fd, "marker", marker, marker_len, "image/svg+xml");
     } else if (strstr(buffer, "GET /images/polygon.svg ")) {
         serve_image(client_fd, "polygon", polygon, polygon_len, "image/svg+xml");
     } else if (strstr(buffer, "GET /images/rectangle.svg ")) {
         serve_image(client_fd, "rectangle", rectangle, rectangle_len, "image/svg+xml");
-    } else if (strstr(buffer, "POST /submit ")) {
+    } else if (strstr(buffer, "GET /submit ")) {
+        serve_html(client_fd, output_map_html, output_map_html_len);
+    } else if (strstr(buffer, "GET /run ")) {
         // Handle POST request
         // Extract the "Content-Length" header to determine the size of the body
         char *content_length_str = strstr(buffer, "Content-Length: ");

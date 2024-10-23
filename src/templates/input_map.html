@@ -396,13 +396,13 @@
             algorithm: selectedAlgorithm,  // Add the selected algorithm here
             bbox: drawnShape instanceof L.Rectangle
                 ? [
-                    drawnShape.getBounds().getNorthWest().lat, drawnShape.getBounds().getNorthWest().lng,
-                    drawnShape.getBounds().getNorthEast().lat, drawnShape.getBounds().getNorthEast().lng,
-                    drawnShape.getBounds().getSouthEast().lat, drawnShape.getBounds().getSouthEast().lng,
-                    drawnShape.getBounds().getSouthWest().lat, drawnShape.getBounds().getSouthWest().lng
+                    [drawnShape.getBounds().getNorthWest().lat, drawnShape.getBounds().getNorthWest().lng],
+                    [drawnShape.getBounds().getNorthEast().lat, drawnShape.getBounds().getNorthEast().lng],
+                    [drawnShape.getBounds().getSouthEast().lat, drawnShape.getBounds().getSouthEast().lng],
+                    [drawnShape.getBounds().getSouthWest().lat, drawnShape.getBounds().getSouthWest().lng]
                 ]
                 : drawnShape.getLatLngs()[0].flatMap(function (point) {
-                    return [point.lat, point.lng];
+                    return [[point.lat, point.lng]];
                 }), // For polygon, flatten lat/lng array
             start: [startPointMarker.getLatLng().lat, startPointMarker.getLatLng().lng],
             dest: [endPointMarker.getLatLng().lat, endPointMarker.getLatLng().lng]
@@ -411,16 +411,25 @@
         // Log the data
         console.log(data);
 
+        // Store data in local storage
+        localStorage.setItem('inputData', JSON.stringify(data));
+
         // POST data to backend
         fetch('/submit', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(data),
+            method: 'GET'
         })
-            .then(response => response.json())
-            .then(data => console.log('Success:', data))
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.text(); // Get the HTML response
+            })
+            .then(html => {
+                // Replace the entire document content with the new HTML
+                document.open();
+                document.write(html);
+                document.close();
+            })
             .catch((error) => console.error('Error:', error));
     });
 

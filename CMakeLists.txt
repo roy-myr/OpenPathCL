@@ -62,9 +62,21 @@ add_custom_command(
         COMMENT "Embedding input_map.html into input_map.h"
 )
 
-# Include the generated html header file
-add_custom_target(embed_html DEPENDS ${CMAKE_SOURCE_DIR}/src/input_map.h)
-add_dependencies(OpenPathCL_webserver embed_html)
+# Include the generated input_map header file
+add_custom_target(embed_input_html DEPENDS ${CMAKE_SOURCE_DIR}/src/input_map.h)
+add_dependencies(OpenPathCL_webserver embed_input_html)
+
+# Add custom command to convert output_map.html to C header
+add_custom_command(
+        OUTPUT ${CMAKE_SOURCE_DIR}/src/output_map.h
+        COMMAND xxd -i -n output_map_html ${CMAKE_SOURCE_DIR}/src/templates/output_map.html ${CMAKE_SOURCE_DIR}/src/output_map.h
+        DEPENDS ${CMAKE_SOURCE_DIR}/src/templates/output_map.html
+        COMMENT "Embedding input_map.html into input_map.h"
+)
+
+# Include the generated input_map header file
+add_custom_target(embed_output_html DEPENDS ${CMAKE_SOURCE_DIR}/src/output_map.h)
+add_dependencies(OpenPathCL_webserver embed_output_html)
 
 # Add a custom command to convert all the images inside the IMAGES list into one images.h file
 add_custom_command(
