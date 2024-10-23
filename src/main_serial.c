@@ -199,17 +199,17 @@ void dijkstra(
     }
 }
 
-int main() {
-    // set the coordinates
-    const double start[2] = {53.75693215197336,9.67449188232422};
-    const double dest[2] = {53.737441882032236,9.68273162841797};
-    const double bbox[8] = {
-        53.76555776977467, 9.666595458984377,
-        53.76555776977467, 9.691486358642578,
-        53.7321617112458, 9.691486358642578,
-        53.7321617112458, 9.666595458984377};
+int main(int argc, char *argv[]) {
+    // define arrays for start and destination
+    double start[2];   // Array for starting coordinates
+    double dest[2];    // Array for destination coordinates
+    double* bbox;      // Pointer for bounding box coordinates
+    int bbox_size;     // Size of the bounding box
 
-    int bbox_size = sizeof(bbox) / sizeof(bbox[0]);
+    // Parse the command-line arguments
+    if (parseArguments(argc, argv, start, dest, &bbox, &bbox_size) != 0) {
+        return 1; // Exit if parsing failed
+    }
 
     // initialise curl
     curl_global_init(CURL_GLOBAL_DEFAULT);

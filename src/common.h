@@ -34,6 +34,7 @@ void freeNodePath(PathNode* head);
 void displayPathOnMap(PathNode* nodePath);
 
 // Functions for the data import
+int parseArguments(int argc, char* argv[], double start[2], double dest[2], double** bbox, int* bbox_size);
 long long getClosestNode(const double* point);
 void getRoadNodes(
     const double* bbox,
