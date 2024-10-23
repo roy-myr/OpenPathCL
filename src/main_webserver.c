@@ -30,8 +30,11 @@ void serve_html(int client_fd) {
 }
 
 void handle_form_submission(int client_fd, char *request_body) {
-
     char response[BUFFER_SIZE];
+
+    // Log the incoming request body
+    printf("Received request body: %s\n", request_body);
+    fflush(stdout);
 
     // Check if the request body is valid
     if (request_body == NULL) {
@@ -43,6 +46,8 @@ void handle_form_submission(int client_fd, char *request_body) {
     // Parse JSON data
     cJSON *json = cJSON_Parse(request_body);
     if (json == NULL) {
+        printf("Failed to parse JSON.\n");
+        fflush(stdout);
         sprintf(response, "HTTP/1.1 400 Bad Request\r\n\r\n");
         send(client_fd, response, strlen(response), 0);
         return;
@@ -54,35 +59,24 @@ void handle_form_submission(int client_fd, char *request_body) {
     const cJSON *start = cJSON_GetObjectItemCaseSensitive(json, "start");
     const cJSON *dest = cJSON_GetObjectItemCaseSensitive(json, "dest");
 
+    // Log the extracted fields
+    printf("Extracted JSON fields: algorithm=%s, bbox size=%d, start size=%d, dest size=%d\n",
+            algorithm ? algorithm->valuestring : "NULL",
+            cJSON_GetArraySize(bbox),
+            cJSON_GetArraySize(start),
+            cJSON_GetArraySize(dest));
+    fflush(stdout);
+
     // Check if all fields are present
     if (!cJSON_IsString(algorithm) || !cJSON_IsArray(bbox) ||
         !cJSON_IsArray(start) || !cJSON_IsArray(dest)) {
+        printf("Missing or invalid fields in JSON.\n");
+        fflush(stdout);
         cJSON_Delete(json);
         sprintf(response, "HTTP/1.1 400 Bad Request\r\n\r\n");
         send(client_fd, response, strlen(response), 0);
         return;
     }
-
-    // Log extracted data
-    printf("Algorithm: %s\n", algorithm->valuestring);
-
-    printf("BBox: ");
-    for (int i = 0; i < cJSON_GetArraySize(bbox); i++) {
-        printf("%f ", cJSON_GetArrayItem(bbox, i)->valuedouble);
-    }
-    printf("\n");
-
-    printf("Start: ");
-    for (int i = 0; i < cJSON_GetArraySize(start); i++) {
-        printf("%f ", cJSON_GetArrayItem(start, i)->valuedouble);
-    }
-    printf("\n");
-
-    printf("Dest: ");
-    for (int i = 0; i < cJSON_GetArraySize(dest); i++) {
-        printf("%f ", cJSON_GetArrayItem(dest, i)->valuedouble);
-    }
-    printf("\n");
 
     // Prepare a response
     sprintf(response, "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n");
@@ -105,23 +99,55 @@ void handle_form_submission(int client_fd, char *request_body) {
 }
 
 
+
 void handle_client(int client_fd) {
     char buffer[BUFFER_SIZE] = {0};
-    read(client_fd, buffer, sizeof(buffer));
+    int bytes_read = read(client_fd, buffer, sizeof(buffer));
 
-    // Parse the request to determine which image to serve
+    // Print entire request for debugging
+    printf("Request:\n%s\n", buffer);
+
+    // Check if it's a GET request for serving images or HTML
     if (strstr(buffer, "GET / ")) {
         serve_html(client_fd);
     } else if (strstr(buffer, "GET /images/marker.svg ")) {
-        serve_image(client_fd, "marker", marker, marker_len, "image/svg+xml"); // Update content type as needed
+        serve_image(client_fd, "marker", marker, marker_len, "image/svg+xml");
     } else if (strstr(buffer, "GET /images/polygon.svg ")) {
-        serve_image(client_fd, "polygon", polygon, polygon_len, "image/svg+xml"); // Update content type as needed
+        serve_image(client_fd, "polygon", polygon, polygon_len, "image/svg+xml");
     } else if (strstr(buffer, "GET /images/rectangle.svg ")) {
         serve_image(client_fd, "rectangle", rectangle, rectangle_len, "image/svg+xml");
     } else if (strstr(buffer, "POST /submit ")) {
-        // Extract the request body (form data)
-        char *request_body = strstr(buffer, "\r\n\r\n") + 4;
-        handle_form_submission(client_fd, request_body);  // Handle form submission
+        // Handle POST request
+        // Extract the "Content-Length" header to determine the size of the body
+        char *content_length_str = strstr(buffer, "Content-Length: ");
+        int content_length = 0;
+        if (content_length_str) {
+            content_length_str += 16;  // Move the pointer to the start of the number
+            content_length = atoi(content_length_str);  // Convert Content-Length to an integer
+        }
+
+        // Find the start of the body (after the headers)
+        char *request_body = strstr(buffer, "\r\n\r\n");
+        if (request_body) {
+            request_body += 4;  // Skip the "\r\n\r\n" to get to the body
+            int body_length = bytes_read - (request_body - buffer);
+
+            // If the body isn't fully read, read the remaining part of the body
+            if (body_length < content_length) {
+                int remaining_body_len = content_length - body_length;
+                char body_buffer[remaining_body_len + 1];
+                int extra_bytes_read = read(client_fd, body_buffer, remaining_body_len);
+                body_buffer[extra_bytes_read] = '\0';  // Null-terminate the body
+                strcat(request_body, body_buffer);  // Append the extra part to the request body
+            }
+
+            // Now handle the form submission with the full body
+            handle_form_submission(client_fd, request_body);
+        } else {
+            // Bad request if we couldn't find the body
+            const char *bad_request_response = "HTTP/1.1 400 Bad Request\r\n\r\n";
+            send(client_fd, bad_request_response, strlen(bad_request_response), 0);
+        }
     } else {
         // Serve a 404 Not Found if the endpoint is not recognized
         const char *not_found_response = "HTTP/1.1 404 Not Found\r\n\r\n";
@@ -130,6 +156,7 @@ void handle_client(int client_fd) {
 
     close(client_fd);
 }
+
 
 int main() {
     int server_fd, client_fd;
