@@ -145,6 +145,9 @@
             <li>
                 Nodes in Bounding Box: <span id="nodesInBoundingBox"></span>
             </li>
+            <li>
+                Roads in Bounding Box: <span id="roadsInBoundingBox"></span>
+            </li>
         </ul>
         <button id="overpassLink" onclick="location.href='overpassLink'">See Nodes</button>
 
@@ -155,7 +158,7 @@
             </li>
 
             <li>
-                Execution Time: <span id="requestTime"></span>
+                Execution Time: <span id="totalTime"></span>
                 <ul>
                     <li>
                         Graph Construction: <span id="graphTime"></span>
@@ -211,18 +214,49 @@
     console.log(inputData)
 
     // Get the received data (replace with your method of getting the data)
-    var receivedData = {
-        startNode: 289358677, // Done
-        destNode: 2161773935, // Done
-        route: [[53.756993, 9.674079], [53.7470, 9.6750], [53.7400, 9.6780], [53.737119, 9.682785]], // Done
-        nodesInBoundingBox: 46457, // Done
-        roadsInBoundingBox: 10, // Done ToDo: Display them
-        requestTime: 73737,
-        graphTime: 8383,
-        routingTime: 73748,
-        routeLength: "2818.56m",  // Done
-        nodesRequest: "https://overpass-turbo.eu"  // Done
-    };
+    // Function to send a POST request to the /run endpoint and handle the response
+    async function receiveData() {
+        // Show the loading screen while the request is being processed
+        showLoading();
+
+        try {
+            // Prepare the data to be sent in the request
+            const requestData = {
+                algorithm: inputData.algorithm,
+                bbox: inputData.bbox,
+                start: inputData.start,
+                dest: inputData.dest
+            };
+
+            // Send the POST request to the /run endpoint
+            const response = await fetch('/run', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json' // Indicate the content type as JSON
+                },
+                body: JSON.stringify(requestData) // Convert request data to JSON string
+            });
+
+            // Check if the response is OK (status code 200-299)
+            if (!response.ok) {
+                throw new Error(`HTTP error! Status: ${response.status}`);
+            }
+
+            console.log(response)
+            // Parse the JSON response from the server
+            const responseData = await response.json();
+
+            console.log(responseData)
+
+            // Show the results using the received data
+            showResults(responseData);
+
+        } catch (error) {
+            console.error("Error fetching data:", error);
+            // Handle errors (e.g., display an error message to the user)
+            document.getElementById('loading').innerText = `Failed to run the algorithm. Error: ${error.message}`;
+        }
+    }
 
     // Function to display loading screen
     function showLoading() {
@@ -242,13 +276,16 @@
 
     // Function to display results
     function showResults(data) {
+        console.log("Data:", data)
+
         document.getElementById('startNode').innerText = data.startNode;
         document.getElementById('startCoords').innerText = inputData.start[0] + ", " + inputData.start[1]
         document.getElementById('algorithm').innerText = inputData.algorithm.charAt(0).toUpperCase() + inputData.algorithm.slice(1);
         document.getElementById('destNode').innerText = data.destNode;
-        document.getElementById('destCoords').innerText = inputData.dest[0] + ", " + inputData.dest[1]
+        document.getElementById('destCoords').innerText = inputData.dest[0] + ", " + inputData.dest[1];
         document.getElementById('nodesInBoundingBox').innerText = data.nodesInBoundingBox;
-        document.getElementById('requestTime').innerText = formatTime(data.requestTime);
+        document.getElementById('roadsInBoundingBox').innerText = data.roadsInBoundingBox;
+        document.getElementById('totalTime').innerText = formatTime(data.totalTime);
         document.getElementById('graphTime').innerText = formatTime(data.graphTime);
         document.getElementById('routingTime').innerText = formatTime(data.routingTime);
         document.getElementById('routeLength').innerText = data.routeLength;
@@ -277,7 +314,7 @@
 
     // Simulate a loading delay
     showLoading();
-    setTimeout(() => showResults(receivedData), 2000); // Simulate receiving data after 2 seconds
+    receiveData();
 </script>
 </body>
 </html>

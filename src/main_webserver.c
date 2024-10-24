@@ -91,7 +91,7 @@ void handle_form_submission(int client_fd, char *request_body) {
         return;
     }
 
-    // determine the path of the programm
+    // determine the path of the program
     const char *program_name = NULL;
     char full_program_path[PATH_MAX];
     char *cwd = get_current_directory();
@@ -117,7 +117,8 @@ void handle_form_submission(int client_fd, char *request_body) {
 
     // Calculate the number of arguments
     int bbox_size = cJSON_GetArraySize(bbox);
-    int num_args = 4 + bbox_size;  // start(2), dest(2), bbox(n), plus the program name
+    int num_bbox_args = bbox_size * 2;  // Each bounding box entry is a pair of coordinates (lat, lng)
+    int num_args = 4 + num_bbox_args;   // start(2), dest(2), bbox(num_bbox_args), plus the program name
 
     // Allocate memory for the argument array dynamically
     char **args = malloc((num_args + 2) * sizeof(char *));  // +2 for program name and NULL termination
@@ -166,16 +167,31 @@ void handle_form_submission(int client_fd, char *request_body) {
         return;
     }
 
-    // Add bounding box coordinates
+    // Add bounding box coordinates (each bbox element is a [lat, lng] pair)
     for (int i = 0; i < bbox_size; i++) {
-        cJSON *bbox_coord = cJSON_GetArrayItem(bbox, i);
-        if (cJSON_IsNumber(bbox_coord)) {
-            char bbox_coord_str[20];
-            sprintf(bbox_coord_str, "%f", bbox_coord->valuedouble);
+        cJSON *bbox_pair = cJSON_GetArrayItem(bbox, i);
+        if (cJSON_IsArray(bbox_pair) && cJSON_GetArraySize(bbox_pair) == 2) {
+            cJSON *bbox_lat = cJSON_GetArrayItem(bbox_pair, 0);  // Latitude
+            cJSON *bbox_lng = cJSON_GetArrayItem(bbox_pair, 1);  // Longitude
 
-            args[arg_idx++] = strdup(bbox_coord_str);
+            if (cJSON_IsNumber(bbox_lat) && cJSON_IsNumber(bbox_lng)) {
+                char bbox_lat_str[20], bbox_lng_str[20];
+                sprintf(bbox_lat_str, "%f", bbox_lat->valuedouble);
+                sprintf(bbox_lng_str, "%f", bbox_lng->valuedouble);
+
+                args[arg_idx++] = strdup(bbox_lat_str);
+                args[arg_idx++] = strdup(bbox_lng_str);
+            } else {
+                printf("Invalid bounding box coordinates.\n");
+                fflush(stdout);
+                cJSON_Delete(json);
+                sprintf(response, "HTTP/1.1 400 Bad Request\r\n\r\n");
+                send(client_fd, response, strlen(response), 0);
+                free(args);
+                return;
+            }
         } else {
-            printf("Invalid bounding box coordinates.\n");
+            printf("Invalid bounding box structure.\n");
             fflush(stdout);
             cJSON_Delete(json);
             sprintf(response, "HTTP/1.1 400 Bad Request\r\n\r\n");
@@ -187,6 +203,14 @@ void handle_form_submission(int client_fd, char *request_body) {
 
     // Null-terminate the argument list for execvp
     args[arg_idx] = NULL;
+
+    // Print the arguments before calling execvp
+    printf("Program to execute:\n");
+    for (int i = 0; i < arg_idx; i++) {
+        printf("%s ", args[i]);
+    }
+    printf("\n");
+    fflush(stdout);
 
     // Create a pipe to capture the output of the external program
     int pipefd[2];
@@ -207,7 +231,6 @@ void handle_form_submission(int client_fd, char *request_body) {
         dup2(pipefd[1], STDOUT_FILENO);
         close(pipefd[1]);  // Close the write end after dup2
 
-        // Execute the external program
         execvp(args[0], args);  // Replace the current process image with the new one
 
         // If execvp returns, there was an error
@@ -228,6 +251,10 @@ void handle_form_submission(int client_fd, char *request_body) {
         waitpid(pid, &status, 0);
 
         // Check if the program executed successfully
+        if (WIFEXITED(status)) {
+            printf("Child process exited with status: %d\n", WEXITSTATUS(status));
+        }
+
         if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
             // Success: capture the output from the pipe
             char buffer[BUFFER_SIZE];
@@ -262,6 +289,8 @@ void handle_form_submission(int client_fd, char *request_body) {
 
     fflush(stdout);
 }
+
+
 
 
 void handle_client(int client_fd) {

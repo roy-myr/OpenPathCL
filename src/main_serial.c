@@ -4,6 +4,7 @@
 #include <float.h>  // For DBL_MAX
 #include <math.h>  // for Pi, sin, cos, atan and sqrt
 #include <curl/curl.h>
+#include <time.h>
 
 #include "common.h"  // Include the common header
 
@@ -185,6 +186,9 @@ int dijkstra(
 }
 
 int main(int argc, char *argv[]) {
+    // get the timestamp of the execution start
+    clock_t total_time_start = clock();
+
     // Start the Response JSON
     printf("{\n");
 
@@ -242,6 +246,7 @@ int main(int argc, char *argv[]) {
     curl_global_cleanup();
 
     // Define the Graph
+    clock_t graph_time_start = clock();  // start the graph time measurement
     double **graph = malloc(nodeCount * sizeof(double *));
     for (int i = 0; i < nodeCount; i++) {
         graph[i] = malloc(nodeCount * sizeof(double));
@@ -251,12 +256,23 @@ int main(int argc, char *argv[]) {
     // Fill the Graph using the Roads Data
     fillGraph(graph, nodeCount, nodes, roads, roadCount);
 
+    // end the graph time and prints its result
+    const clock_t graph_time_end = clock();
+    const double graph_time  = ((double) (graph_time_end - graph_time_start));
+    printf("\t\"graphTime\": %f,\n", graph_time);
+
     // ToDo: look if the start and dest are actually inside the node
 
     // Run Dijkstra's algorithm with the source and target IDs
+    clock_t routing_time_start = clock();  // Start the routing time
     if (dijkstra(nodeCount, graph, nodes, start_id, destination_id) != 0) {
         return 1;
     }
+
+    // end the routing time and print its result
+    const clock_t routing_time_end = clock();
+    const double routing_time  = ((double) (routing_time_end - routing_time_start));
+    printf("\t\"routingTime\": %f,\n", routing_time);
 
     // free the graph
     for (int i = 0; i < nodeCount; i++) {
@@ -264,8 +280,12 @@ int main(int argc, char *argv[]) {
     }
     free(graph);
 
+    // get the total time and print its result
+    const clock_t total_time_end = clock();
+    const double total_time = ((double) (total_time_end - total_time_start));
+    printf("\t\"totalTime\": %f,\n", total_time);
+
     // End the Response JSON
     printf("\t\"success\": true\n}\n");
-
     return 0;
 }
