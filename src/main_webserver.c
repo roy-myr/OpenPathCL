@@ -9,8 +9,10 @@
 #include "output_map.h"
 #include "images.h"
 
-#define PORT 5050
-#define BUFFER_SIZE 4096
+#define PORT 8080
+#define INITIAL_BUFFER_SIZE 1024
+#define HEADER_END "\r\n\r\n"
+#define RESPONSE_HEADER "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n"
 #define PATH_MAX 1024
 
 void serve_image(int client_fd, const char *image_name, unsigned char *image_data, unsigned int image_len, const char *content_type) {
@@ -56,26 +58,34 @@ char *get_current_directory() {
 }
 
 void handle_form_submission(int client_fd, char *request_body) {
-    char response[BUFFER_SIZE];
+    size_t response_size = INITIAL_BUFFER_SIZE;
+    char *response = malloc(response_size);
+    if (!response) {
+        perror("Failed to allocate memory for response");
+        close(client_fd);
+        return;
+    }
 
     // Log the incoming request body
     printf("Received request body: %s\n", request_body);
     fflush(stdout);
 
     // Check if the request body is valid
-    if (request_body == NULL) {
-        sprintf(response, "HTTP/1.1 400 Bad Request\r\n\r\n");
+    if (!request_body) {
+        snprintf(response, response_size, "HTTP/1.1 400 Bad Request\r\n\r\n");
         send(client_fd, response, strlen(response), 0);
+        free(response);
         return;
     }
 
     // Parse JSON data
     cJSON *json = cJSON_Parse(request_body);
-    if (json == NULL) {
+    if (!json) {
         printf("Failed to parse JSON.\n");
         fflush(stdout);
-        sprintf(response, "HTTP/1.1 400 Bad Request\r\n\r\n");
+        snprintf(response, response_size, "HTTP/1.1 400 Bad Request\r\n\r\n");
         send(client_fd, response, strlen(response), 0);
+        free(response);
         return;
     }
 
@@ -225,92 +235,133 @@ void handle_form_submission(int client_fd, char *request_body) {
     printf("\n");
     fflush(stdout);
 
-    // Create a pipe to capture the output of the external program
+    // Fork a child process to execute the external program
     int pipefd[2];
     if (pipe(pipefd) == -1) {
-        perror("pipe failed");
-        sprintf(response, "HTTP/1.1 500 Internal Server Error\r\n\r\nPipe creation failed.");
+        perror("Pipe failed");
+        snprintf(response, response_size, "HTTP/1.1 500 Internal Server Error\r\n\r\nPipe creation failed.");
         send(client_fd, response, strlen(response), 0);
+        free(response);
+        cJSON_Delete(json);
         return;
     }
 
-    // Fork a child process to execute the external program
     pid_t pid = fork();
     if (pid == 0) {
-        // In child process
-        close(pipefd[0]);  // Close the read end of the pipe
+        // Child process: execute external program
+        close(pipefd[0]);  // Close read end of the pipe
+        dup2(pipefd[1], STDOUT_FILENO); // Redirect stdout to pipe
+        close(pipefd[1]);  // Close write end after redirection
 
-        // Redirect stdout to the write end of the pipe
-        dup2(pipefd[1], STDOUT_FILENO);
-        close(pipefd[1]);  // Close the write end after dup2
-
-        execvp(args[0], args);  // Replace the current process image with the new one
-
-        // If execvp returns, there was an error
-        perror("execvp failed");
+        execvp(args[0], args);
+        perror("execvp failed");  // If execvp fails
         exit(EXIT_FAILURE);
     } else if (pid < 0) {
         // Fork failed
         perror("fork failed");
-        sprintf(response, "HTTP/1.1 500 Internal Server Error\r\n\r\n");
+        snprintf(response, response_size, "HTTP/1.1 500 Internal Server Error\r\n\r\n");
         send(client_fd, response, strlen(response), 0);
+        free(response);
+        cJSON_Delete(json);
         return;
-    } else {
-        // In parent process, wait for the child process to complete
-        close(pipefd[1]);  // Close the write end of the pipe
-        int status;
-
-        // Wait for the child process to finish
-        waitpid(pid, &status, 0);
-
-        // Check if the program executed successfully
-        if (WIFEXITED(status)) {
-            printf("Child process exited with status: %d\n", WEXITSTATUS(status));
-        }
-
-        if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
-            // Success: capture the output from the pipe
-            char buffer[BUFFER_SIZE];
-            ssize_t count = read(pipefd[0], buffer, sizeof(buffer) - 1);
-            if (count > 0) {
-                buffer[count] = '\0';  // Null-terminate the output string
-
-                // Send the response to the client
-                sprintf(response, "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n");
-                send(client_fd, response, strlen(response), 0);
-                send(client_fd, buffer, count, 0);  // Send the captured JSON output
-            } else {
-                // No output or error reading from pipe
-                sprintf(response, "HTTP/1.1 500 Internal Server Error\r\n\r\nFailed to read output.");
-                send(client_fd, response, strlen(response), 0);
-            }
-        } else {
-            // Error during execution
-            sprintf(response, "HTTP/1.1 500 Internal Server Error\r\n\r\nExecution failed.");
-            send(client_fd, response, strlen(response), 0);
-        }
-
-        close(pipefd[0]);  // Close the read end of the pipe
     }
 
-    // Clean up
+    // Parent process
+    close(pipefd[1]);  // Close write end of the pipe
+
+    // Read from the pipe dynamically
+    size_t pipe_buffer_size = INITIAL_BUFFER_SIZE;
+    char *pipe_buffer = malloc(pipe_buffer_size);
+    if (!pipe_buffer) {
+        perror("Failed to allocate memory for pipe buffer");
+        snprintf(response, response_size, "HTTP/1.1 500 Internal Server Error\r\n\r\nMemory allocation failed.");
+        send(client_fd, response, strlen(response), 0);
+        free(response);
+        close(pipefd[0]);
+        cJSON_Delete(json);
+        return;
+    }
+
+    size_t total_read = 0;
+    ssize_t bytes_read;
+    while ((bytes_read = read(pipefd[0], pipe_buffer + total_read, pipe_buffer_size - total_read - 1)) > 0) {
+        total_read += bytes_read;
+
+        // Expand buffer if it's full
+        if (total_read >= pipe_buffer_size - 1) {
+            pipe_buffer_size *= 2;
+            pipe_buffer = realloc(pipe_buffer, pipe_buffer_size);
+            if (!pipe_buffer) {
+                perror("Failed to reallocate memory for pipe buffer");
+                snprintf(response, response_size, "HTTP/1.1 500 Internal Server Error\r\n\r\nMemory allocation failed.");
+                send(client_fd, response, strlen(response), 0);
+                free(response);
+                close(pipefd[0]);
+                cJSON_Delete(json);
+                return;
+            }
+        }
+    }
+    pipe_buffer[total_read] = '\0';  // Null-terminate the output
+
+    // Response headers + JSON output from the external program
+    snprintf(response, response_size, RESPONSE_HEADER);
+    send(client_fd, response, strlen(response), 0);
+    send(client_fd, pipe_buffer, total_read, 0);
+
+    // Cleanup
+    close(pipefd[0]);
+    free(response);
+    free(pipe_buffer);
     cJSON_Delete(json);
     for (int i = 0; i < arg_idx; i++) {
-        free(args[i]);  // Free the dynamically allocated argument strings
+        free(args[i]);
     }
-    free(args);  // Free the argument array
-
-    fflush(stdout);
+    free(args);
 }
 
 
+void handle_client(const int client_fd) {
+    // Initial buffer setup with a reasonable default size
+    int buffer_size = INITIAL_BUFFER_SIZE;
+    char *buffer = malloc(buffer_size);
+    if (!buffer) {
+        perror("Failed to allocate memory");
+        close(client_fd);
+        return;
+    }
 
+    int bytes_read = 0;
+    int total_bytes_read = 0;
 
-void handle_client(int client_fd) {
-    char buffer[BUFFER_SIZE] = {0};
-    int bytes_read = read(client_fd, buffer, sizeof(buffer));
+    // Loop to handle reading request headers
+    while (1) {
+        bytes_read = read(client_fd, buffer + total_bytes_read, buffer_size - total_bytes_read - 1);
+        if (bytes_read <= 0) {
+            free(buffer);
+            close(client_fd);
+            return; // Connection closed or error
+        }
 
-    // Check if it's a GET request for serving images or HTML
+        total_bytes_read += bytes_read;
+        buffer[total_bytes_read] = '\0'; // Null-terminate buffer for strstr
+
+        // Check if headers have ended
+        if (strstr(buffer, HEADER_END)) break;
+
+        // If buffer is full, expand it
+        if (total_bytes_read >= buffer_size - 1) {
+            buffer_size *= 2;
+            buffer = realloc(buffer, buffer_size);
+            if (!buffer) {
+                perror("Failed to reallocate memory");
+                close(client_fd);
+                return;
+            }
+        }
+    }
+
+    // Handle GET requests
     if (strstr(buffer, "GET / ")) {
         serve_html(client_fd, input_map_html, input_map_html_len);
     } else if (strstr(buffer, "GET /images/marker.svg ")) {
@@ -331,34 +382,34 @@ void handle_client(int client_fd) {
             content_length = atoi(content_length_str);  // Convert Content-Length to an integer
         }
 
-        // Find the start of the body (after the headers)
-        char *request_body = strstr(buffer, "\r\n\r\n");
-        if (request_body) {
-            request_body += 4;  // Skip the "\r\n\r\n" to get to the body
-            int body_length = bytes_read - (request_body - buffer);
+        // Check if the body is fully read
+        char *request_body = strstr(buffer, HEADER_END) + strlen(HEADER_END);
+        int body_length = total_bytes_read - (request_body - buffer);
 
-            // If the body isn't fully read, read the remaining part of the body
-            if (body_length < content_length) {
-                int remaining_body_len = content_length - body_length;
-                char body_buffer[remaining_body_len + 1];
-                int extra_bytes_read = read(client_fd, body_buffer, remaining_body_len);
-                body_buffer[extra_bytes_read] = '\0';  // Null-terminate the body
-                strcat(request_body, body_buffer);  // Append the extra part to the request body
+        // If body is partially read, read the remaining part
+        if (body_length < content_length) {
+            int remaining_body_len = content_length - body_length;
+            buffer = realloc(buffer, total_bytes_read + remaining_body_len + 1);
+            if (!buffer) {
+                perror("Failed to reallocate memory for body");
+                close(client_fd);
+                return;
             }
 
-            // Now handle the form submission with the full body
-            handle_form_submission(client_fd, request_body);
-        } else {
-            // Bad request if we couldn't find the body
-            const char *bad_request_response = "HTTP/1.1 400 Bad Request\r\n\r\n";
-            send(client_fd, bad_request_response, strlen(bad_request_response), 0);
+            bytes_read = read(client_fd, buffer + total_bytes_read, remaining_body_len);
+            total_bytes_read += bytes_read;
+            buffer[total_bytes_read] = '\0'; // Null-terminate
         }
+
+        // Handle the full form submission
+        handle_form_submission(client_fd, request_body);
     } else {
         // Serve a 404 Not Found if the endpoint is not recognized
         const char *not_found_response = "HTTP/1.1 404 Not Found\r\n\r\n";
         send(client_fd, not_found_response, strlen(not_found_response), 0);
     }
 
+    free(buffer); // Free the dynamically allocated buffer
     close(client_fd);
 }
 
