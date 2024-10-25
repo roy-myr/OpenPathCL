@@ -105,9 +105,7 @@ int dijkstra(
 
     // If the source or target doesn't exist, exit the function
     if (start == -1 || destination == -1) {
-        printf("\t\"success\": false,\n"
-               "\t\"error\": \"Invalid source or target ID\"\n"
-               "}");
+        fprintf(stderr, "Invalid source or target ID\n");
         return -1;
     }
 
@@ -149,7 +147,6 @@ int dijkstra(
             if (!visited_map[v] && graph[u][v] && dist[u] != DBL_MAX && dist[u] + graph[u][v] < dist[v]) {
                 dist[v] = dist[u] + graph[u][v];
                 prev[v] = u; // Update previous vertex
-                // printf("Updated verticie %d with distance %f, and previous %d\n", v, dist[v], prev[v]);
             }
         }
 
@@ -179,9 +176,7 @@ int dijkstra(
         freeNodePath(nodePath);   // Free the allocated memory for the nodePath
         return 0;
     }
-    printf("\t\"success\": false,\n"
-           "\t\"error\": \"Target %lld cannot be reached from source %lld\"\n"
-           "}", destination_id, start_id);
+    fprintf(stderr, "Target %lld cannot be reached from source %lld\n", destination_id, start_id);
     return -1;
 }
 
@@ -209,18 +204,14 @@ int main(int argc, char *argv[]) {
     // get the nodes closest to the given address
     long long start_id = getClosestNode(start);
     if (start_id == -1) {
-        printf("\t\"success\": false,\n"
-               "\t\"error\": \"Couldn't find closest Node to the start coordinates (%f, %f).\"\n"
-               "}\n", start[0], start[1]);
+        fprintf(stderr, "Couldn't find closest Node to the start coordinates (%f, %f)\n", start[0], start[1]);
         return 1;
     }
     printf("\t\"startNode\": %lld,\n", start_id);
 
     long long destination_id = getClosestNode(dest);
     if (destination_id == -1) {
-        printf("\t\"success\": false,\n"
-               "\t\"error\": \"Couldn't find closest Node to the destination coordinates (%f, %f).\"\n"
-               "}\n", dest[0], dest[1]);
+        fprintf(stderr, "Couldn't find closest node to the destination coordinates (%f, %f)\n", dest[0], dest[1]);
         return 1;
     }
     printf("\t\"destNode\": %lld,\n", destination_id);

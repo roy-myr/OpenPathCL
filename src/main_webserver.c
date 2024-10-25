@@ -235,10 +235,23 @@ void handle_form_submission(int client_fd, char *request_body) {
     printf("\n");
     fflush(stdout);
 
+    // declare pipes
+    int pipefd[2]; // For stdout
+    int error_pipe[2]; // For stderr
+
     // Fork a child process to execute the external program
-    int pipefd[2];
     if (pipe(pipefd) == -1) {
         perror("Pipe failed");
+        snprintf(response, response_size, "HTTP/1.1 500 Internal Server Error\r\n\r\nPipe creation failed.");
+        send(client_fd, response, strlen(response), 0);
+        free(response);
+        cJSON_Delete(json);
+        return;
+    }
+
+    // create the stderr pipe
+    if (pipe(error_pipe) == -1) {
+        perror("Pipe for stderr failed");
         snprintf(response, response_size, "HTTP/1.1 500 Internal Server Error\r\n\r\nPipe creation failed.");
         send(client_fd, response, strlen(response), 0);
         free(response);
@@ -249,13 +262,17 @@ void handle_form_submission(int client_fd, char *request_body) {
     pid_t pid = fork();
     if (pid == 0) {
         // Child process: execute external program
-        close(pipefd[0]);  // Close read end of the pipe
+        close(pipefd[0]);  // Close read end of the stdout pipe
         dup2(pipefd[1], STDOUT_FILENO); // Redirect stdout to pipe
         close(pipefd[1]);  // Close write end after redirection
 
+        close(error_pipe[0]); // Close read end of the stderr pipe
+        dup2(error_pipe[1], STDERR_FILENO); // Redirect stderr to error pipe
+        close(error_pipe[1]); // Close write end after redirection
+
         execvp(args[0], args);
         perror("execvp failed");  // If execvp fails
-        exit(EXIT_FAILURE);
+        exit(EXIT_FAILURE);  // Use a non-zero exit code to indicate failure
     } else if (pid < 0) {
         // Fork failed
         perror("fork failed");
@@ -267,7 +284,58 @@ void handle_form_submission(int client_fd, char *request_body) {
     }
 
     // Parent process
-    close(pipefd[1]);  // Close write end of the pipe
+    close(pipefd[1]);  // Close write end of the stdout pipe
+    close(error_pipe[1]); // Close write end of the stderr pipe
+
+    // Wait for the child process to finish and get the exit status
+    int status;
+    waitpid(pid, &status, 0);
+
+    // Check the exit status of the child process
+    if (WIFEXITED(status)) {
+        int exit_code = WEXITSTATUS(status);
+        printf("Child exited with code: %d\n", exit_code);
+
+        // Handle non-zero exit code (failure)
+        if (exit_code != 0) {
+            // Read from the stderr pipe
+            char error_buffer[INITIAL_BUFFER_SIZE];
+            ssize_t bytes_read = read(error_pipe[0], error_buffer, sizeof(error_buffer) - 1);
+            if (bytes_read > 0) {
+                error_buffer[bytes_read] = '\0'; // Null-terminate the error message
+            } else {
+                snprintf(error_buffer, sizeof(error_buffer), "No error message available.");
+            }
+
+            // Send the stderr output to the client
+            snprintf(response, response_size, "HTTP/1.1 500 Internal Server Error\r\n\r\nAlgorithm failed (exit code %d). Error: %s", exit_code, error_buffer);
+            send(client_fd, response, strlen(response), 0);
+
+            // Cleanup before returning
+            free(response);
+            cJSON_Delete(json);
+            for (int i = 0; i < arg_idx; i++) {
+                free(args[i]);
+            }
+            free(args);
+            close(error_pipe[0]); // Close read end of the error pipe
+            return;
+        }
+    } else {
+        // Child process did not terminate normally
+        snprintf(response, response_size, "HTTP/1.1 500 Internal Server Error\r\n\r\nExternal program did not terminate normally.");
+        send(client_fd, response, strlen(response), 0);
+
+        // Cleanup before returning
+        free(response);
+        cJSON_Delete(json);
+        for (int i = 0; i < arg_idx; i++) {
+            free(args[i]);
+        }
+        free(args);
+        close(error_pipe[0]); // Close read end of the error pipe
+        return;
+    }
 
     // Read from the pipe dynamically
     size_t pipe_buffer_size = INITIAL_BUFFER_SIZE;

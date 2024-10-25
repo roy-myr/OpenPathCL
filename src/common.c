@@ -68,7 +68,7 @@ void parseAndStoreJSON(const char* jsonResponse, Node** nodes, int* nodeCount, R
     // Parse the JSON response
     cJSON *root = cJSON_Parse(jsonResponse);
     if (root == NULL) {
-        printf("Error parsing JSON\n");
+        fprintf(stderr, "Error parsing JSON\n");
         return;
     }
 
@@ -172,7 +172,7 @@ static size_t WriteMemoryCallback(const void* contents, const size_t size, size_
     char* ptr = realloc(mem->memory, mem->size + realSize + 1);
     if (ptr == NULL) {
         // out of memory
-        printf("not enough memory (realloc returned NULL)\n");
+        fprintf(stderr, "Not enough memory (realloc returned NULL)\n");
         return 0;
     }
 
@@ -188,10 +188,8 @@ static size_t WriteMemoryCallback(const void* contents, const size_t size, size_
 int parseArguments(int argc, char* argv[], double start[2], double dest[2], double** bbox, int* bbox_size) {
     // Check for the required number of arguments
     if (argc < 10 || (argc - 6) % 2 != 1) {
-        printf("\t\"success\": false,\n"
-               "\t\"error\": \"Invalid Arguments\",\n"
-               "\t\"usage\": \"%s start_lat start_lon dest_lat dest_lon bbox_lat1 bbox_lon1 bbox_lat2 bbox_lon2 ...\"\n"
-               "}\n", argv[0]);
+        fprintf(stderr, "Invalid Arguments\n "
+                        "Usage: start_lat start_lon dest_lat dest_lon bbox_lat1 bbox_lon1 bbox_lat2 bbox_lon2 ...\n");
         return -1; // Indicate an error
     }
 

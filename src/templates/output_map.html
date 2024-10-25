@@ -239,32 +239,25 @@
 
             // Check if the response is OK (status code 200-299)
             if (!response.ok) {
-                throw new Error(`HTTP error! Status: ${response.status}`);
+                const errorData = await response.text(); // Get the error response text
+                throw new Error(errorData);
             }
 
             console.log(response)
             // Parse the JSON response from the server
             const responseData = await response.json();
 
-            console.log(responseData)
-
-
-            // Check if the Algorithm was successful
-            if (!responseData.success) {
-                console.error("Error fetching data:", responseData.error);
-                // Handle errors (e.g., display an error message to the user)
-                document.getElementById('loading').innerText = `Failed to run the algorithm. Error: ${responseData.error}`;
-            } else {
-                // Show the results using the received data
-                showResults(responseData);
-            }
+            // Show the results using the received data
+            showResults(responseData);
 
         } catch (error) {
             console.error("Error fetching data:", error);
-            // Handle errors (e.g., display an error message to the user)
-            document.getElementById('loading').innerText = `Failed to run the algorithm. Error: ${error.message}`;
+
+            // Directly display the error message to the user
+            document.getElementById('loading').innerText = error.message;
         }
     }
+
 
     // Function to display loading screen
     function showLoading() {
