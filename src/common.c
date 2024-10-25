@@ -341,7 +341,7 @@ void getRoadNodes(
         strncat(postData, "');out body;>;out skel qt;", sizeof(postData) - strlen(postData) - 1);
 
         // Debugging print to see the constructed query
-        printf("\t\"nodesRequest\": \"http://overpass-turbo.eu/?Q=%s\",\n", postData);
+        printf("\t\"nodesRequest\": \"https://overpass-turbo.eu/?Q=%s\",\n", postData);
 
         // Set the API endpoint
         curl_easy_setopt(curl, CURLOPT_URL, "https://overpass-api.de/api/interpreter");

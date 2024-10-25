@@ -258,8 +258,8 @@ int main(int argc, char *argv[]) {
 
     // end the graph time and prints its result
     const clock_t graph_time_end = clock();
-    const double graph_time  = ((double) (graph_time_end - graph_time_start));
-    printf("\t\"graphTime\": %f,\n", graph_time);
+    const double graph_time  = ((double) (graph_time_end - graph_time_start)) * 1000 / CLOCKS_PER_SEC;
+    printf("\t\"graphTime\": %.f,\n", graph_time);
 
     // ToDo: look if the start and dest are actually inside the node
 
@@ -271,8 +271,11 @@ int main(int argc, char *argv[]) {
 
     // end the routing time and print its result
     const clock_t routing_time_end = clock();
-    const double routing_time  = ((double) (routing_time_end - routing_time_start));
-    printf("\t\"routingTime\": %f,\n", routing_time);
+    const double routing_time_ms = (double)(routing_time_end - routing_time_start) * 1000 / CLOCKS_PER_SEC;
+
+    printf("\t\"routingTime\": %.f,\n", routing_time_ms);
+
+
 
     // free the graph
     for (int i = 0; i < nodeCount; i++) {
@@ -282,8 +285,8 @@ int main(int argc, char *argv[]) {
 
     // get the total time and print its result
     const clock_t total_time_end = clock();
-    const double total_time = ((double) (total_time_end - total_time_start));
-    printf("\t\"totalTime\": %f,\n", total_time);
+    const double total_time = ((double) (total_time_end - total_time_start)) * 1000 / CLOCKS_PER_SEC;
+    printf("\t\"totalTime\": %.f,\n", total_time);
 
     // End the Response JSON
     printf("\t\"success\": true\n}\n");

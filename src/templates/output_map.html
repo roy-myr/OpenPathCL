@@ -267,11 +267,9 @@
     // Function to convert milliseconds to a formatted string
     function formatTime(ms) {
         const seconds = Math.floor(ms / 1000);
-        const minutes = Math.floor(seconds / 60);
-        const remainingSeconds = seconds % 60;
         const milliseconds = ms % 1000;
 
-        return `${minutes}m${remainingSeconds}s${milliseconds}ms`;
+        return `${seconds}s${milliseconds}ms`;
     }
 
     // Function to display results
