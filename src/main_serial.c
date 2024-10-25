@@ -180,7 +180,7 @@ int dijkstra(
         return 0;
     }
     printf("\t\"success\": false,\n"
-           "\t\"error\": \"Target %lld cannot be reached from source %lld\n\""
+           "\t\"error\": \"Target %lld cannot be reached from source %lld\"\n"
            "}", destination_id, start_id);
     return -1;
 }

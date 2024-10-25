@@ -248,8 +248,16 @@
 
             console.log(responseData)
 
-            // Show the results using the received data
-            showResults(responseData);
+
+            // Check if the Algorithm was successful
+            if (!responseData.success) {
+                console.error("Error fetching data:", responseData.error);
+                // Handle errors (e.g., display an error message to the user)
+                document.getElementById('loading').innerText = `Failed to run the algorithm. Error: ${responseData.error}`;
+            } else {
+                // Show the results using the received data
+                showResults(responseData);
+            }
 
         } catch (error) {
             console.error("Error fetching data:", error);
