@@ -80,34 +80,28 @@ int minDistance(const int vertices, double dist[], bool visited_map[]) {
     return min_index;
 }
 
+int find_node_with_id(Node nodes[], const int vertices, const long long node_id) {
+    for (int i = 0; i < vertices; i++) {
+        if (nodes[i].id == node_id) {
+            return  i;
+        }
+    }
+    return -1;
+}
+
 // Dijkstra's single-source shortest path algorithm with structs
 int dijkstra(
         const int vertices,
         double **graph,
         Node nodes[],
-        const long long start_id,
-        const long long destination_id) {
+        const int start_index,
+        const int dest_index) {
 
     double dist[vertices];     // Output array. dist[i] holds the shortest distance from src to i
     bool visited_map[vertices]; // visited_map[i] is true if vertex i is included in the shortest path tree
     int prev[vertices];     // prev[i] stores the previous vertex in the path
 
-    // Find the index of the start and destination nodes using their IDs
-    int start = -1, destination = -1;
-    for (int i = 0; i < vertices; i++) {
-        if (nodes[i].id == start_id) {
-            start = i;
-        }
-        if (nodes[i].id == destination_id) {
-            destination = i;
-        }
-    }
 
-    // If the source or target doesn't exist, exit the function
-    if (start == -1 || destination == -1) {
-        fprintf(stderr, "Invalid source or target ID\n");
-        return -1;
-    }
 
     // Initialize all distances as INFINITE and visited_map[] as false
     for (int i = 0; i < vertices; i++) {
@@ -117,7 +111,7 @@ int dijkstra(
     }
 
     // Distance of source vertex from itself is always 0
-    dist[start] = 0;
+    dist[start_index] = 0;
 
     // Find the shortest path for all vertices
     for (int count = 0; count < vertices - 1; count++) {
@@ -151,7 +145,7 @@ int dijkstra(
         }
 
         // Check if the target vertex has been reached
-        if (u == destination) {
+        if (u == dest_index) {
             break; // Stop the loop when the shortest path to the target is found
         }
     }
@@ -160,10 +154,10 @@ int dijkstra(
     // printDijkstraState(vertices, visited_map, dist, prev);
 
     // After the loop, check if the target vertex has been reached
-    if (dist[destination] != INF) {
+    if (dist[dest_index] != INF) {
         // Retrieve and print the path
         PathNode* nodePath = NULL; // Initialize the linked list for the nodePath
-        int current = destination;
+        int current = dest_index;
 
         // Trace back the path from destination to source
         while (current != -1) {
@@ -171,12 +165,12 @@ int dijkstra(
             current = prev[current]; // Move to the previous node
         }
 
-        printf("\t\"routeLength\": \"%.2fm\",\n", dist[destination]);
+        printf("\t\"routeLength\": \"%.2fm\",\n", dist[dest_index]);
         printNodePath(nodePath); // Print the nodePath
         freeNodePath(nodePath);   // Free the allocated memory for the nodePath
         return 0;
     }
-    fprintf(stderr, "Target %lld cannot be reached from source %lld\n", destination_id, start_id);
+    fprintf(stderr, "Target cannot be reached from source\n");
     return -1;
 }
 
@@ -236,13 +230,22 @@ int main(int argc, char *argv[]) {
     // end curl
     curl_global_cleanup();
 
+    // Find the index of the start and dest node
+    const int start_index = find_node_with_id(nodes, nodeCount, start_id);
+    const int dest_index = find_node_with_id(nodes, nodeCount, destination_id);
+
+    // If the source or target doesn't exist, exit the function
+    if (start_index == -1 || dest_index == -1) {
+        fprintf(stderr, "Invalid source or target ID\n");
+        return -1;
+    }
+
     // Define the Graph
     clock_t graph_time_start = clock();  // start the graph time measurement
     double **graph = malloc(nodeCount * sizeof(double *));
     for (int i = 0; i < nodeCount; i++) {
         graph[i] = malloc(nodeCount * sizeof(double));
     }
-
 
     // Fill the Graph using the Roads Data
     fillGraph(graph, nodeCount, nodes, roads, roadCount);
@@ -252,11 +255,9 @@ int main(int argc, char *argv[]) {
     const double graph_time  = ((double) (graph_time_end - graph_time_start)) * 1000 / CLOCKS_PER_SEC;
     printf("\t\"graphTime\": %.f,\n", graph_time);
 
-    // ToDo: look if the start and dest are actually inside the node
-
     // Run Dijkstra's algorithm with the source and target IDs
     clock_t routing_time_start = clock();  // Start the routing time
-    if (dijkstra(nodeCount, graph, nodes, start_id, destination_id) != 0) {
+    if (dijkstra(nodeCount, graph, nodes, start_index, dest_index) != 0) {
         return 1;
     }
 
@@ -265,8 +266,6 @@ int main(int argc, char *argv[]) {
     const double routing_time_ms = (double)(routing_time_end - routing_time_start) * 1000 / CLOCKS_PER_SEC;
 
     printf("\t\"routingTime\": %.f,\n", routing_time_ms);
-
-
 
     // free the graph
     for (int i = 0; i < nodeCount; i++) {
