@@ -14,21 +14,34 @@
 #define PATH_MAX 1024
 
 void serve_image(int client_fd, const char *image_name, unsigned char *image_data, unsigned int image_len, const char *content_type) {
-    char response[BUFFER_SIZE];
-    sprintf(response, "HTTP/1.1 200 OK\r\nContent-Type: %s\r\nContent-Length: %u\r\n\r\n", content_type, image_len);
-    send(client_fd, response, strlen(response), 0);
+    size_t response_size = snprintf(NULL, 0, "HTTP/1.1 200 OK\r\nContent-Type: %s\r\nContent-Length: %u\r\n\r\n", content_type, image_len);
+    char *response = malloc(response_size + 1);
+    if (!response) {
+        perror("Memory allocation failed for response");
+        return;
+    }
+    snprintf(response, response_size + 1, "HTTP/1.1 200 OK\r\nContent-Type: %s\r\nContent-Length: %u\r\n\r\n", content_type, image_len);
+
+    send(client_fd, response, response_size, 0);
     send(client_fd, image_data, image_len, 0);
+
+    free(response);
 }
 
 void serve_html(int client_fd, const char *html_content, size_t content_length) {
-    char response[BUFFER_SIZE];
+    size_t header_len = snprintf(NULL, 0, "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: %zu\r\n\r\n", content_length);
+    char *response = malloc(header_len + content_length + 1); // +1 for null-termination
+    if (!response) {
+        perror("Memory allocation failed for response");
+        return;
+    }
 
-    // Send HTTP headers
-    sprintf(response, "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: %zu\r\n\r\n", content_length);
-    send(client_fd, response, strlen(response), 0);
+    snprintf(response, header_len + 1, "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: %zu\r\n\r\n", content_length);
+    memcpy(response + header_len, html_content, content_length);  // Copy HTML content into response
 
-    // Send the embedded HTML content
-    send(client_fd, html_content, content_length, 0);
+    send(client_fd, response, header_len + content_length, 0);
+
+    free(response);
 }
 
 // Function to get the current working dir
@@ -118,7 +131,7 @@ void handle_form_submission(int client_fd, char *request_body) {
     // Calculate the number of arguments
     int bbox_size = cJSON_GetArraySize(bbox);
     int num_bbox_args = bbox_size * 2;  // Each bounding box entry is a pair of coordinates (lat, lng)
-    int num_args = 4 + num_bbox_args;   // start(2), dest(2), bbox(num_bbox_args), plus the program name
+    int num_args = 4 + num_bbox_args; // start(2), dest(2), bbox(num_bbox_args), plus the program name
 
     // Allocate memory for the argument array dynamically
     char **args = malloc((num_args + 2) * sizeof(char *));  // +2 for program name and NULL termination
