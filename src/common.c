@@ -97,7 +97,6 @@ void parseAndStoreJSON(const char* jsonResponse, Node** nodes, int* nodeCount, R
                 node.id = id->valuedouble;
                 node.lat = lat->valuedouble;
                 node.lon = lon->valuedouble;
-                node.index = *nodeCount;
 
                 (*nodes)[*nodeCount] = node;
                 (*nodeCount)++;

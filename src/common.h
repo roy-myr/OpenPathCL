@@ -3,7 +3,6 @@
 
 // Define a struct to store the Nodes
 typedef struct {
-    int index;  // Index in the graph matrix
     long long id;  // Node ID
     double lat;  // Latitude of the Node
     double lon;  // Longitude of the Node
