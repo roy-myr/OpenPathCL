@@ -9,13 +9,13 @@
 #include "output_map.h"
 #include "images.h"
 
-#define PORT 8080
+#define PORT 5050
 #define INITIAL_BUFFER_SIZE 1024
 #define HEADER_END "\r\n\r\n"
 #define RESPONSE_HEADER "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n"
 #define PATH_MAX 1024
 
-void serve_image(int client_fd, const char *image_name, unsigned char *image_data, unsigned int image_len, const char *content_type) {
+void serve_image(const int client_fd, const char *image_name, const unsigned char *image_data, const unsigned int image_len, const char *content_type) {
     size_t response_size = snprintf(NULL, 0, "HTTP/1.1 200 OK\r\nContent-Type: %s\r\nContent-Length: %u\r\n\r\n", content_type, image_len);
     char *response = malloc(response_size + 1);
     if (!response) {
@@ -30,7 +30,7 @@ void serve_image(int client_fd, const char *image_name, unsigned char *image_dat
     free(response);
 }
 
-void serve_html(int client_fd, const char *html_content, size_t content_length) {
+void serve_html(const int client_fd, const char *html_content, size_t content_length) {
     size_t header_len = snprintf(NULL, 0, "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: %zu\r\n\r\n", content_length);
     char *response = malloc(header_len + content_length + 1); // +1 for null-termination
     if (!response) {
@@ -432,6 +432,8 @@ void handle_client(const int client_fd) {
     // Handle GET requests
     if (strstr(buffer, "GET / ")) {
         serve_html(client_fd, input_map_html, input_map_html_len);
+    } else if (strstr(buffer, "GET /images/favicon.png ")) {
+        serve_image(client_fd, "favicon", favicon, favicon_len, "image/png");
     } else if (strstr(buffer, "GET /images/marker.svg ")) {
         serve_image(client_fd, "marker", marker, marker_len, "image/svg+xml");
     } else if (strstr(buffer, "GET /images/polygon.svg ")) {

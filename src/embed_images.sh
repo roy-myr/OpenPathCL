@@ -7,7 +7,7 @@ OUTPUT_FILE="$1"
 echo "// Embedded image data" > "$OUTPUT_FILE"
 
 # List of images
-IMAGES=("marker.svg" "polygon.svg" "rectangle.svg")
+IMAGES=("favicon.png" "marker.svg" "polygon.svg" "rectangle.svg")
 
 # Get the directory of the script
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
