@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="author" content="Roy Meyer">
+    <title>OpenPathCL Output</title>
+    <link rel="icon" type="image/png" href="images/favicon.png"/>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <style>
+        body {
+            margin: 0;
+            display: flex;
+            height: 100vh; /* Full height */
+            font-family: Arial, sans-serif; /* Change font */
+            background-color: #2c2c2c; /* Dark background for the whole page */
+            color: #f4f4f4; /* Light text color */
+        }
+        #map {
+            flex: 1; /* 75% of the width */
+            height: 100%; /* Full height */
+        }
+        #sidebar {
+            flex: 0 0 auto; /* 25% of the width */
+            min-width: 450px;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start; /* Align content to the top */
+            align-items: center; /* Align content to the left */
+            background-color: #3c3c3c; /* Darker background for sidebar */
+        }
+        #content {
+            margin: 20px;
+            width: 85%;
+            display: none; /* Hide content by default */
+        }
+        h1 {
+            text-align: center;
+            margin-top: 50px; /* Adjusted top margin */
+            font-size: 36px; /* Slightly smaller font size */
+        }
+        h2 {
+            margin-bottom: 8px;
+        }
+        hr {
+            width: 99%;
+            margin: 0;
+            padding: 0;
+        }
+        button {
+            width: 140px;
+            margin: 10px 0; /* Add spacing between buttons */
+            padding: 10px 15px; /* Padding for the buttons */
+            border: none; /* Remove border */
+            border-radius: 5px; /* Rounded corners */
+            background-color: #888; /* Green background */
+            color: white; /* White text color */
+            cursor: pointer; /* Pointer cursor on hover */
+            font-size: 16px; /* Button font size */
+            transition: background-color 0.3s; /* Smooth background color transition */
+        }
+        button:hover {
+            background-color: #777; /* Darker green on hover */
+        }
+        button.submit {
+            background-color: #4caf50; /* Green background */
+            color: white; /* White text color */
+        }
+        button.submit:hover {
+            background-color: #45a049; /* Darker green on hover */
+        }
+        button.submit:disabled {
+            background-color: #b56565; /* Light gray for disabled state */
+            color: #fff; /* Keep text white for contrast */
+            cursor: not-allowed; /* Change cursor to indicate it's not clickable */
+            opacity: 0.7; /* Optional: reduce opacity for a softer look */
+        }
+        /* Position the GitHub icon */
+        .github-icon {
+            position: fixed; /* Fix position */
+            bottom: 20px; /* Position from the bottom */
+            right: 20px; /* Position from the right */
+            width: 40px; /* Set the width of the icon */
+            height: 40px; /* Set the height of the icon */
+            background-color: #333; /* Dark background for contrast */
+            border-radius: 50%; /* Circular icon */
+            display: flex; /* Flexbox for centering */
+            justify-content: center; /* Center content horizontally */
+            align-items: center; /* Center content vertically */
+        }
+
+        .github-icon img {
+            width: 80%; /* Make the icon fill the button */
+            height: auto; /* Maintain aspect ratio */
+            background-color: #fefefe; /* Semi-transparent white background */
+            border-radius: 3px; /* Rounded corners */
+            padding: 5px; /* Padding around the icon */
+            margin: 1px;
+        }
+
+        /* Loading screen styles */
+        #loading {
+            display: none; /* Hidden by default */
+            position: fixed; /* Fixed position */
+            text-align: center;
+            left: 0;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.8); /* Semi-transparent background */
+            color: white; /* White text color */
+            font-size: 24px; /* Font size */
+            display: flex; /* Flexbox for centering */
+            justify-content: center; /* Center horizontally */
+            align-items: center; /* Center vertically */
+            z-index: 1000; /* Above other content */
+        }
+
+        /* Dark mode map */
+        .leaflet-layer,
+        .leaflet-control-zoom-in,
+        .leaflet-control-zoom-out,
+        .leaflet-control-attribution {
+            filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);
+        }
+        .leaflet-container {
+            background: #000
+        }
+    </style>
+</head>
+<body>
+<div id="map"></div>
+<div id="sidebar">
+    <h1>OpenPathCL</h1>
+    <hr>
+
+    <div id="content">
+        <h2>Your Input</h2>
+        <ul>
+            <li>
+                Start: Node <span id="startNode"></span> <br> (<span id="startCoords"></span>)
+            </li>
+            <li>
+                Destination: Node <span id="destNode"></span> <br> (<span id="destCoords"></span>)
+            </li>
+            <li>
+                Nodes in Bounding Box: <span id="nodesInBoundingBox"></span>
+            </li>
+            <li>
+                Roads in Bounding Box: <span id="roadsInBoundingBox"></span>
+            </li>
+        </ul>
+        <button id="overpassLink" onclick="location.href='overpassLink'">See Nodes</button>
+
+        <h2>Results</h2>
+        <ul id="results">
+            <li>
+                Algorithm: <span id="algorithm"></span>
+            </li>
+
+            <li>
+                Execution Time: <span id="totalTime"></span>
+                <ul>
+                    <li>
+                        Graph Construction: <span id="graphTime"></span>
+                    </li>
+                    <li>
+                        Routing Algorithm: <span id="routingTime"></span>
+                    </li>
+                </ul>
+            </li>
+            <li>
+                Length of your Route: <span id="routeLength"></span>
+            </li>
+        </ul>
+        <br>
+    </div>
+
+    <hr>
+
+    <br>
+    <div style="position: relative; display: inline-block;">
+        <button class="submit" id="home" onclick="location.reload()">Next Request</button>
+    </div>
+</div>
+
+<a href="https://github.com/roy-myr/OpenPathCL" target="_blank" class="github-icon" title="View the Code on GitHub">
+    <img src="https://upload.wikimedia.org/wikipedia/commons/9/91/Octicons-mark-github.svg" alt="GitHub Icon" />
+</a>
+
+<!-- Loading screen -->
+<div id="loading">Running the Algorithm... <br> This can take a while, please wait...</div>
+
+<script>
+    // Initialize the map
+    var map = L.map('map').setView([53.746056, 9.678164], 13); // Adjust initial view to center between start and destination
+
+    // Add a tile layer
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: 'Map data © OpenStreetMap contributors',
+    }).addTo(map);
+
+    // Store references to start and end point markers
+    var startPointMarker, endPointMarker;
+
+    // get the input data from the local storage
+    var storageData = localStorage.getItem('inputData');
+    var inputData = storageData ? JSON.parse(storageData): null
+
+    if (!inputData) {
+        alert("No Input was found in local Storage!");
+        window.location.replace("/");
+    }
+
+    console.log(inputData)
+
+    // Get the received data (replace with your method of getting the data)
+    // Function to send a POST request to the /run endpoint and handle the response
+    async function receiveData() {
+        // Show the loading screen while the request is being processed
+        showLoading();
+
+        try {
+            // Prepare the data to be sent in the request
+            const requestData = {
+                algorithm: inputData.algorithm,
+                bbox: inputData.bbox,
+                start: inputData.start,
+                dest: inputData.dest
+            };
+
+            // Send the POST request to the /run endpoint
+            const response = await fetch('/run', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json' // Indicate the content type as JSON
+                },
+                body: JSON.stringify(requestData) // Convert request data to JSON string
+            });
+
+            // Check if the response is OK (status code 200-299)
+            if (!response.ok) {
+                const errorData = await response.text(); // Get the error response text
+                throw new Error(errorData);
+            }
+
+            console.log(response)
+            // Parse the JSON response from the server
+            const responseData = await response.json();
+
+            // Show the results using the received data
+            showResults(responseData);
+
+        } catch (error) {
+            console.error("Error fetching data:", error);
+
+            // Directly display the error message to the user
+            document.getElementById('loading').innerText = error.message;
+        }
+    }
+
+
+    // Function to display loading screen
+    function showLoading() {
+        document.getElementById('loading').style.display = 'flex'; // Show loading screen
+        document.getElementById('content').style.display = 'none'; // Hide content
+    }
+
+    // Function to convert milliseconds to a formatted string
+    function formatTime(ms) {
+        const seconds = Math.floor(ms / 1000);
+        const milliseconds = ms % 1000;
+
+        return `${seconds}s${milliseconds}ms`;
+    }
+
+    // Function to display results
+    function showResults(data) {
+        console.log("Data:", data)
+
+        document.getElementById('startNode').innerText = data.startNode;
+        document.getElementById('startCoords').innerText = inputData.start[0] + ", " + inputData.start[1]
+        document.getElementById('algorithm').innerText = inputData.algorithm.charAt(0).toUpperCase() + inputData.algorithm.slice(1);
+        document.getElementById('destNode').innerText = data.destNode;
+        document.getElementById('destCoords').innerText = inputData.dest[0] + ", " + inputData.dest[1];
+        document.getElementById('nodesInBoundingBox').innerText = data.nodesInBoundingBox;
+        document.getElementById('roadsInBoundingBox').innerText = data.roadsInBoundingBox;
+        document.getElementById('totalTime').innerText = formatTime(data.totalTime);
+        document.getElementById('graphTime').innerText = formatTime(data.graphTime);
+        document.getElementById('routingTime').innerText = formatTime(data.routingTime);
+        document.getElementById('routeLength').innerText = data.routeLength;
+
+        // Update the overpass link button
+        document.getElementById('overpassLink').onclick = function() {
+            window.open(data.nodesRequest, '_blank'); // Set the link dynamically
+        };
+
+        // Add start and end point markers
+        startPointMarker = L.marker(inputData.start).addTo(map);
+        endPointMarker = L.marker(inputData.dest).addTo(map);
+
+        // Draw route line
+        var routeLine = L.polyline(data.route, {color: 'red'}).addTo(map);
+
+        // Add a bounding box (polygon) to the map
+        var polygonPoints = inputData.bbox; // Assuming bbox is an array of [lat, lng] pairs
+        boundingBox = L.polygon(polygonPoints, {color: '#3388ff', weight: 1}).addTo(map); // Use L.polygon instead of L.pol
+        map.fitBounds(inputData.bbox)
+
+        // Show results content
+        document.getElementById('content').style.display = 'block'; // Show content
+        document.getElementById('loading').style.display = 'none'; // Hide loading screen
+    }
+
+    // Simulate a loading delay
+    showLoading();
+    receiveData();
+</script>
+</body>
+</html>
