@@ -100,15 +100,6 @@ int minDistance(const int vertices, const float dist[], const bool visited_map[]
     return min_index;
 }
 
-int find_node_with_id(Node nodes[], const int vertices, const long long node_id) {
-    for (int i = 0; i < vertices; i++) {
-        if (nodes[i].id == node_id) {
-            return  i;
-        }
-    }
-    return -1;
-}
-
 // Dijkstra's single-source shortest path algorithm
 int dijkstra(
         const int vertices,
@@ -255,8 +246,13 @@ int main(const int argc, char *argv[]) {
     free(roads);
 
     // Find the index of the start and dest node
-    const int start_index = find_node_with_id(nodes, nodeCount, start_id);  // ToDo: join these to make them more efficient
-    const int dest_index = find_node_with_id(nodes, nodeCount, destination_id);
+    int start_index = -1;
+    int dest_index = -1;
+    for (int i = 0; i < nodeCount; i++) {
+        if (nodes[i].id == start_id) start_index = i;
+        if (nodes[i].id == destination_id) dest_index = i;
+        if (start_index != -1 && dest_index != -1) break;
+    }
 
     // If the source or target doesn't exist, exit the function
     if (start_index == -1 || dest_index == -1) {
