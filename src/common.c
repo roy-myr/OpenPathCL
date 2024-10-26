@@ -38,7 +38,7 @@ void appendToNodePath(PathNode** head, const Node data) {
 }
 
 // Function to print the path
-void printNodePath(PathNode* head) {
+void printNodePath(const PathNode* head) {
     printf("\t\"route\": [");
     const PathNode* current = head;
     while (current != NULL) {
@@ -88,15 +88,15 @@ void parseAndStoreJSON(const char* jsonResponse, Node** nodes, int* nodeCount, R
 
         // Handle "node" elements
         if (cJSON_IsString(type) && (strcmp(type->valuestring, "node") == 0)) {
-            Node node;
             const cJSON *id = cJSON_GetObjectItemCaseSensitive(element, "id");
             const cJSON *lat = cJSON_GetObjectItemCaseSensitive(element, "lat");
             const cJSON *lon = cJSON_GetObjectItemCaseSensitive(element, "lon");
 
             if (cJSON_IsNumber(id) && cJSON_IsNumber(lat) && cJSON_IsNumber(lon)) {
-                node.id = id->valuedouble;
-                node.lat = lat->valuedouble;
-                node.lon = lon->valuedouble;
+                Node node;
+                node.id = (int64_t) id->valuedouble;
+                node.lat = (float) lat->valuedouble;
+                node.lon = (float) lon->valuedouble;
 
                 (*nodes)[*nodeCount] = node;
                 (*nodeCount)++;
@@ -114,22 +114,22 @@ void parseAndStoreJSON(const char* jsonResponse, Node** nodes, int* nodeCount, R
         }
         // Handle "way" elements (Roads)
         else if (cJSON_IsString(type) && (strcmp(type->valuestring, "way") == 0)) {
-            Road road;
             const cJSON *id = cJSON_GetObjectItemCaseSensitive(element, "id");
             const cJSON *nodesArray = cJSON_GetObjectItemCaseSensitive(element, "nodes");
 
             if (cJSON_IsNumber(id) && cJSON_IsArray(nodesArray)) {
-                road.id = id->valuedouble;
+                Road road;
+                road.id = (int64_t) id->valuedouble;
                 road.nodeCount = cJSON_GetArraySize(nodesArray);
 
                 // Allocate memory for the node IDs in this road
-                road.nodes = (long long*)malloc(road.nodeCount * sizeof(long long));
+                road.nodes = (int64_t*)malloc(road.nodeCount * sizeof(int64_t));
 
                 int nodeIndex = 0;
-                cJSON *nodeId = NULL;
+                const cJSON *nodeId = NULL;
                 cJSON_ArrayForEach(nodeId, nodesArray) {
                     if (cJSON_IsNumber(nodeId)) {
-                        road.nodes[nodeIndex] = nodeId->valuedouble;
+                        road.nodes[nodeIndex] = (int64_t) nodeId->valuedouble;
                         nodeIndex++;
                     }
                 }
@@ -184,7 +184,7 @@ static size_t WriteMemoryCallback(const void* contents, const size_t size, size_
 }
 
 // Function to parse command-line arguments
-int parseArguments(int argc, char* argv[], double start[2], double dest[2], double** bbox, int* bbox_size) {
+int parseArguments(const int argc, char* argv[], float start[2], float dest[2], float** bbox, int* bbox_size) {
     // Check for the required number of arguments
     if (argc < 10 || (argc - 6) % 2 != 1) {
         fprintf(stderr, "Invalid Arguments\n "
@@ -193,16 +193,16 @@ int parseArguments(int argc, char* argv[], double start[2], double dest[2], doub
     }
 
     // Parse start point
-    start[0] = strtod(argv[1], NULL);  // start latitude
-    start[1] = strtod(argv[2], NULL);  // start longitude
+    start[0] = strtof(argv[1], NULL);  // start latitude
+    start[1] = strtof(argv[2], NULL);  // start longitude
 
     // Parse destination point
-    dest[0] = strtod(argv[3], NULL);   // destination latitude
-    dest[1] = strtod(argv[4], NULL);   // destination longitude
+    dest[0] = strtof(argv[3], NULL);   // destination latitude
+    dest[1] = strtof(argv[4], NULL);   // destination longitude
 
     // Calculate number of bounding box coordinates
     *bbox_size = argc - 6;  // Remaining arguments are bbox points
-    *bbox = (double*)malloc(*bbox_size * sizeof(double)); // Dynamically allocate memory for bbox
+    *bbox = (float*)malloc(*bbox_size * sizeof(float)); // Dynamically allocate memory for bbox
 
     // Check for successful memory allocation
     if (*bbox == NULL) {
@@ -212,22 +212,20 @@ int parseArguments(int argc, char* argv[], double start[2], double dest[2], doub
 
     // Parse bounding box coordinates
     for (int i = 0; i < *bbox_size + 1; ++i) {
-        (*bbox)[i] = strtod(argv[5 + i], NULL);
+        (*bbox)[i] = strtof(argv[5 + i], NULL);
     }
 
     return 0; // Successful parsing
 }
 
 // Function to get the closest node to given coordinates
-long long getClosestNode(const double* point) {
-    CURL* curl;
-    CURLcode res;
+long long getClosestNode(const float* point) {
     struct MemoryStruct response;
 
     response.memory = malloc(1);  // will be grown as needed by realloc
     response.size = 0;            // no data at this point
 
-    curl = curl_easy_init();
+    CURL *curl = curl_easy_init();
 
     if (curl) {
         char postData[512];
@@ -250,7 +248,7 @@ long long getClosestNode(const double* point) {
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void*)&response);
 
         // Perform the request
-        res = curl_easy_perform(curl);
+        const CURLcode res = curl_easy_perform(curl);
 
         // Check for errors
         if (res != CURLE_OK) {
@@ -260,7 +258,7 @@ long long getClosestNode(const double* point) {
             cJSON *root = cJSON_Parse(response.memory);
             if (root != NULL) {
                 const cJSON *elements = cJSON_GetObjectItemCaseSensitive(root, "elements");
-                cJSON *element = NULL;
+                const cJSON *element = NULL;
 
                 long long closestNodeId = -1;
                 double closestDistance = -1;
@@ -273,14 +271,14 @@ long long getClosestNode(const double* point) {
                         const cJSON *lonNode = cJSON_GetObjectItemCaseSensitive(element, "lon");
 
                         if (cJSON_IsNumber(id) && cJSON_IsNumber(latNode) && cJSON_IsNumber(lonNode)) {
-                            double nodeLat = latNode->valuedouble;
-                            double nodeLon = lonNode->valuedouble;
+                            const float nodeLat = (float) latNode->valuedouble;
+                            const float nodeLon = (float) lonNode->valuedouble;
 
                             // Calculate the distance (simple Euclidean distance)
-                            double distance = (point[0] - nodeLat) * (point[0] - nodeLat) + (point[1] - nodeLon) * (point[1] - nodeLon);
+                            const float distance = (point[0] - nodeLat) * (point[0] - nodeLat) + (point[1] - nodeLon) * (point[1] - nodeLon);
                             if (closestDistance < 0 || distance < closestDistance) {
                                 closestDistance = distance;
-                                closestNodeId = id->valuedouble;
+                                closestNodeId = (int64_t) id->valuedouble;
                             }
                         }
                     }
@@ -303,24 +301,21 @@ long long getClosestNode(const double* point) {
 
 // Function to get road nodes between two coordinates with a buffer
 void getRoadNodes(
-        const double* bbox,
+        const float* bbox,
         const int bbox_size,
         Node** nodes,
         int* nodeCount,
         Road** roads,
         int* roadCount) {
-
-    CURL* curl;
-    CURLcode res;
     struct MemoryStruct response;
 
     response.memory = malloc(1);  // will be grown as needed by realloc
     response.size = 0;            // no data at this point
 
-    curl = curl_easy_init();
+    CURL *curl = curl_easy_init();
 
     if (curl) {
-        char postData[2048];  // Assuming 2048 bytes is sufficient, adjust as needed
+        char postData[2048];  // holds the post data
         char polyBuffer[1024] = {0}; // To hold the polygon (bbox) coordinates
 
         // Start constructing the Overpass QL query
@@ -351,7 +346,7 @@ void getRoadNodes(
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void*)&response);
 
         // Perform the request
-        res = curl_easy_perform(curl);
+        const CURLcode res = curl_easy_perform(curl);
 
         // Check for errors
         if (res != CURLE_OK) {

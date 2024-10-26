@@ -3,16 +3,16 @@
 
 // Define a struct to store the Nodes
 typedef struct {
-    long long id;  // Node ID
-    double lat;  // Latitude of the Node
-    double lon;  // Longitude of the Node
+    int64_t id;  // Node ID
+    float lat;  // Latitude of the Node
+    float lon;  // Longitude of the Node
 } Node;
 
 // Define a struct to store the Roads
 typedef struct {
-    long long id;
+    int64_t id;  // Way ID
     int nodeCount;
-    long long *nodes;
+    int64_t *nodes;  // Array of Node IDs
 } Road;
 
 // Construct a linked list that resales a path through the graph
@@ -22,21 +22,18 @@ typedef struct PathNode {
 } PathNode;
 
 // OpenPathCL functions that are the same in both the serial and parallel implementations
-void get_data(float latitude, float longitude);
-void display_results();
 
 // Functions for the path
 PathNode* createPathNode(const Node data);
 void appendToNodePath(PathNode** head, const Node data);
-void printNodePath(PathNode* head);
+void printNodePath(const PathNode* head);
 void freeNodePath(PathNode* head);
-void displayPathOnMap(PathNode* nodePath);
 
 // Functions for the data import
-int parseArguments(int argc, char* argv[], double start[2], double dest[2], double** bbox, int* bbox_size);
-long long getClosestNode(const double* point);
+int parseArguments(int argc, char* argv[], float start[2], float dest[2], float** bbox, int* bbox_size);
+long long getClosestNode(const float* point);
 void getRoadNodes(
-    const double* bbox,
+    const float* bbox,
     const int bbox_size,
     Node** nodes,
     int* nodeCount,
