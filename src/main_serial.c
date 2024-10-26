@@ -189,6 +189,7 @@ int main(const int argc, char *argv[]) {
 
     // Parse the command-line arguments
     if (parseArguments(argc, argv, start, dest, &bbox, &bbox_size) != 0) {
+        free(bbox);
         return 1; // Exit if parsing failed
     }
 
@@ -230,7 +231,8 @@ int main(const int argc, char *argv[]) {
     // end curl
     curl_global_cleanup();
 
-    // free roads
+    // free the not needed data
+    free(bbox);
     free(roads);
 
     // Find the index of the start and dest node
@@ -240,6 +242,7 @@ int main(const int argc, char *argv[]) {
     // If the source or target doesn't exist, exit the function
     if (start_index == -1 || dest_index == -1) {
         fprintf(stderr, "Invalid source or target ID\n");
+        free(nodes);
         return -1;
     }
 
@@ -261,20 +264,27 @@ int main(const int argc, char *argv[]) {
     // Run Dijkstra's algorithm with the source and target IDs
     const clock_t routing_time_start = clock();  // Start the routing time
     if (dijkstra(nodeCount, graph, nodes, start_index, dest_index) != 0) {
+        for (int i = 0; i < nodeCount; i++) {
+            free(graph[i]);
+        }
+        free(graph);
+        free(nodes);
         return 1;
     }
 
-    // end the routing time and print its result
-    const clock_t routing_time_end = clock();
-    const double routing_time_ms = (double)(routing_time_end - routing_time_start) * 1000 / CLOCKS_PER_SEC;
-
-    printf("\t\"routingTime\": %.f,\n", routing_time_ms);
+    free(nodes);
 
     // free the graph
     for (int i = 0; i < nodeCount; i++) {
         free(graph[i]);
     }
     free(graph);
+
+    // end the routing time and print its result
+    const clock_t routing_time_end = clock();
+    const double routing_time_ms = (double)(routing_time_end - routing_time_start) * 1000 / CLOCKS_PER_SEC;
+
+    printf("\t\"routingTime\": %.f,\n", routing_time_ms);
 
     // get the total time and print its result
     const clock_t total_time_end = clock();
