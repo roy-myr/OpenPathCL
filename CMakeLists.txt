@@ -3,6 +3,9 @@ project(OpenPathCL C)
 
 set(CMAKE_C_STANDARD 11)
 
+# Include the OpenCL headers from Homebrew
+include_directories("/usr/local/opt/opencl-headers/include")
+
 # Find OpenCL package and include the directories
 find_package(OpenCL REQUIRED)
 include_directories(${OpenCL_INCLUDE_DIRS})
@@ -41,12 +44,11 @@ add_executable(OpenPathCL_parallel
 # Link CURL to the parallel version
 target_link_libraries(OpenPathCL_parallel ${CURL_LIBRARIES})
 
+# Add cJSON to the parallel version
+target_link_libraries(OpenPathCL_parallel cjson)
+
 # Link OpenCL to the parallel version
 target_link_libraries(OpenPathCL_parallel ${OpenCL_LIBRARIES})
-
-# Add cJSON to the parallel version
-target_link_libraries(OpenPathCL_serial cjson)
-
 
 # ------ Webserver --------
 
