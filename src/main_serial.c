@@ -29,14 +29,7 @@ float haversine(float lat1, const float lon1, float lat2, const float lon2) {
 }
 
 // Function to fill the graph with the data from the roads
-void fillGraph(float **graph, const int nodeCount, const Node* nodes, const Road* roads, const int roadCount) {
-    // Initialize the graph with 0 or INF for non-edges
-    for (int i = 0; i < nodeCount; i++) {
-        for (int j = 0; j < nodeCount; j++) {
-            graph[i][j] = 0;  // Set all values to 0
-        }
-    }
-
+void createGraph(Node* nodes, const int nodeCount, const Road* roads, const int roadCount) {
     // Iterate through each road
     for (int i = 0; i < roadCount; i++) {
         const Road road = roads[i];
@@ -58,12 +51,39 @@ void fillGraph(float **graph, const int nodeCount, const Node* nodes, const Road
                 const float distance = haversine(nodes[index1].lat, nodes[index1].lon,
                                                   nodes[index2].lat, nodes[index2].lon);
 
-                // Update the graph for both directions
-                graph[index1][index2] = distance;
-                graph[index2][index1] = distance;
+                // Add edge from index1 to index2
+                Edge* newEdge1 = malloc(sizeof(Edge));
+                if (newEdge1) {
+                    newEdge1->destination = index2;
+                    newEdge1->weight = distance;
+                    newEdge1->next = nodes[index1].head;
+                    nodes[index1].head = newEdge1;
+                }
+
+                // Add edge from index2 to index1 (for undirected graph)
+                Edge* newEdge2 = malloc(sizeof(Edge));
+                if (newEdge2) {
+                    newEdge2->destination = index1;
+                    newEdge2->weight = distance;
+                    newEdge2->next = nodes[index2].head;
+                    nodes[index2].head = newEdge2;
+                }
             }
         }
     }
+}
+
+void freeNodes(Node* nodes, int nodeCount) {
+    for (int i = 0; i < nodeCount; i++) {
+        Edge* current = nodes[i].head;
+        while (current != NULL) {
+            Edge* temp = current;
+            current = current->next;
+            free(temp); // Free each edge in the linked list
+        }
+        nodes[i].head = NULL; // Set head to NULL after freeing
+    }
+    free(nodes); // Finally, free the array of nodes itself
 }
 
 // Function to find the vertex with the minimum distance value
@@ -89,10 +109,9 @@ int find_node_with_id(Node nodes[], const int vertices, const long long node_id)
     return -1;
 }
 
-// Dijkstra's single-source shortest path algorithm with structs
+// Dijkstra's single-source shortest path algorithm
 int dijkstra(
         const int vertices,
-        float **graph,
         Node nodes[],
         const int start_index,
         const int dest_index) {
@@ -124,8 +143,6 @@ int dijkstra(
             break;
         }
 
-        //printf("Picked vertices %d, distance: %f\n", u, dist[u]);
-
         // If the selected vertex has an infinite distance, no further vertices are reachable
         if (dist[u] == INF) {
             break; // No need to process further, as remaining vertices are unreachable
@@ -135,11 +152,13 @@ int dijkstra(
         visited_map[u] = true;
 
         // Update dist value of the adjacent vertices of the picked vertex.
-        for (int v = 0; v < vertices; v++) {
+        for (Edge* edge = nodes[u].head; edge != NULL; edge = edge->next) {
+            const int v = edge->destination;
+            const float weight = edge->weight;
             // Update dist[v] only if it's not in visited_map, there is an edge from u to v,
             // and the total weight of the path from src to v through u is smaller than the current value of dist[v]
-            if (!visited_map[v] && graph[u][v] && dist[u] != DBL_MAX && dist[u] + graph[u][v] < dist[v]) {
-                dist[v] = dist[u] + graph[u][v];
+            if (!visited_map[v] && dist[u] + weight < dist[v]) {
+                dist[v] = dist[u] + weight;
                 prev[v] = u; // Update previous vertex
             }
         }
@@ -236,7 +255,7 @@ int main(const int argc, char *argv[]) {
     free(roads);
 
     // Find the index of the start and dest node
-    const int start_index = find_node_with_id(nodes, nodeCount, start_id);
+    const int start_index = find_node_with_id(nodes, nodeCount, start_id);  // ToDo: join these to make them more efficient
     const int dest_index = find_node_with_id(nodes, nodeCount, destination_id);
 
     // If the source or target doesn't exist, exit the function
@@ -248,13 +267,9 @@ int main(const int argc, char *argv[]) {
 
     // Define the Graph
     const clock_t graph_time_start = clock();  // start the graph time measurement
-    float **graph = malloc(nodeCount * sizeof(float *));
-    for (int i = 0; i < nodeCount; i++) {
-        graph[i] = malloc(nodeCount * sizeof(float));
-    }
 
     // Fill the Graph using the Roads Data
-    fillGraph(graph, nodeCount, nodes, roads, roadCount);
+    createGraph(nodes, nodeCount, roads, roadCount);
 
     // end the graph time and prints its result
     const clock_t graph_time_end = clock();
@@ -263,22 +278,12 @@ int main(const int argc, char *argv[]) {
 
     // Run Dijkstra's algorithm with the source and target IDs
     const clock_t routing_time_start = clock();  // Start the routing time
-    if (dijkstra(nodeCount, graph, nodes, start_index, dest_index) != 0) {
-        for (int i = 0; i < nodeCount; i++) {
-            free(graph[i]);
-        }
-        free(graph);
-        free(nodes);
+    if (dijkstra(nodeCount, nodes, start_index, dest_index) != 0) {
+        freeNodes(nodes, nodeCount);
         return 1;
     }
 
-    free(nodes);
-
-    // free the graph
-    for (int i = 0; i < nodeCount; i++) {
-        free(graph[i]);
-    }
-    free(graph);
+    freeNodes(nodes, nodeCount);
 
     // end the routing time and print its result
     const clock_t routing_time_end = clock();

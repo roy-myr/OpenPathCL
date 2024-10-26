@@ -1,11 +1,19 @@
 #ifndef COMMON_H
 #define COMMON_H
 
+// Define the struct for an edge in the adjacency list
+typedef struct Edge {
+    int destination;  // Index of the destination node
+    float weight;    // Weight of the edge
+    struct Edge* next;
+} Edge;
+
 // Define a struct to store the Nodes
 typedef struct {
     int64_t id;  // Node ID
     float lat;  // Latitude of the Node
     float lon;  // Longitude of the Node
+    Edge* head;  // Head of the linked list of Edges connected to the Node
 } Node;
 
 // Define a struct to store the Roads
