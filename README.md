@@ -39,7 +39,8 @@ one for **nodes** (vertices) and one for **roads** (edges). Nodes represent the 
 ### Step 2: Constructing the Graph
 
 After parsing the data, it is converted into a graph representation so that algorithms can be run on it. 
-The graph is modeled as an `n x n` adjacency matrix, where `n` represents the total number of nodes.
+The graph is modeled as an [adjacency list](https://en.wikipedia.org/wiki/Adjacency_list), where each node contains 
+a linked list of edges, wich are connected to it.
 
 - Each node corresponds to a vertex in the graph.
 - Roads provide the information needed to define edges between the nodes (vertices).
@@ -48,8 +49,7 @@ The graph is modeled as an `n x n` adjacency matrix, where `n` represents the to
 
 The [Haversine algorithm](https://en.wikipedia.org/wiki/Haversine_formula) is used to calculate the distance between 
 two nodes, and this distance serves as the weight of the edge connecting them. 
-These weights are stored in the [adjacency matrix](https://en.wikipedia.org/wiki/Adjacency_matrix) at the appropriate 
-indices for the connected nodes.
+These weights are stored in the edge struct inside the adjacency list.
 
 
 ### Step 3: Calculating the shortest distance
