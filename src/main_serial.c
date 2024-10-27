@@ -1,16 +1,17 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h> // For boolean data types
-#include <float.h>  // For DBL_MAX
+#include <float.h>  // For FLT_MAX
 #include <math.h>  // for Pi, sin, cos, atan and sqrt
 #include <curl/curl.h>
 #include <time.h>
 
 #include "common.h"  // Include the common header
 
-#define INF DBL_MAX
+#define INF FLT_MAX
 #define EARTH_RADIUS 6371000  // Earth's radius in meters
 
+#define DELTA 10.0 // The Delta value for bucket ranges, this can be tuned for optimal performance
 
 // Function for calculating the distance between two coordinated on earth
 float haversine(float lat1, const float lon1, float lat2, const float lon2) {
@@ -44,6 +45,7 @@ void createGraph(Node* nodes, const int nodeCount, const Road* roads, const int 
             for (int k = 0; k < nodeCount; k++) {
                 if (nodes[k].id == nodeId1) index1 = k;
                 if (nodes[k].id == nodeId2) index2 = k;
+                if (index1 != -1 && index2 != -1) break;
             }
 
             // If both nodes are found, calculate the distance between them
@@ -111,9 +113,7 @@ int dijkstra(
     bool visited_map[vertices]; // visited_map[i] is true if vertex i is included in the shortest path tree
     int prev[vertices];     // prev[i] stores the previous vertex in the path
 
-
-
-    // Initialize all distances as INFINITE and visited_map[] as false
+    // Initialize all distances as INFINITE, visited_map[] as false and previous as -1
     for (int i = 0; i < vertices; i++) {
         dist[i] = INF;
         visited_map[i] = false;
@@ -153,36 +153,156 @@ int dijkstra(
                 prev[v] = u; // Update previous vertex
             }
         }
-
         // Check if the target vertex has been reached
         if (u == dest_index) {
             break; // Stop the loop when the shortest path to the target is found
         }
     }
 
-    // print the results for testing
-    // printDijkstraState(vertices, visited_map, dist, prev);
+    // After the loop, check if the target vertex has been reached
+    if (dist[dest_index] != INF) {
+        // Retrieve and print the path
+        int current = dest_index;
+
+        printf("\t\"route\": [");
+        while (current != -1) {
+            printf("[%f, %f]", nodes[current].lat, nodes[current].lon);
+            current = prev[current]; // Move to the previous node
+            if (current != -1) {
+                printf(", ");
+            }
+        }
+        printf("],\n");
+
+        printf("\t\"routeLength\": \"%.2fm\",\n", dist[dest_index]);
+        return 0;
+    }
+    fprintf(stderr, "Target cannot be reached from source\n");
+    return 1;
+}
+
+
+void add_to_bucket(int **buckets, int *bucket_count, const int index, const int node) {
+    // add the node to the bucket and increase the bucket count
+    buckets[index][bucket_count[index]++] = node;
+}
+
+
+int deltaStepping(
+        const int vertices,
+        Node nodes[],
+        const int start_index,
+        const int dest_index) {
+
+    float dist[vertices];     // Output array. dist[i] holds the shortest distance from src to i
+    int prev[vertices];     // prev[i] stores the previous vertex in the path
+
+    // Initialize all distances as INFINITE, visited_map[] as false and previous as -1
+    for (int i = 0; i < vertices; i++) {
+        dist[i] = INF;
+        prev[i] = -1; // Undefined previous vertex
+    }
+
+    // Distance of source vertex from itself is always 0
+    dist[start_index] = 0;
+
+    // define the buckets array
+    int *buckets[vertices];
+    int bucket_count[vertices];
+
+    // initialise the buckets array
+    for (int i = 0; i < vertices; i++) {
+        buckets[i] = malloc(vertices * sizeof(int));
+        bucket_count[i] = 0;
+    }
+
+    // add the start node to the first bucket
+    add_to_bucket(buckets, bucket_count, 0, start_index);
+
+    // go through each Node
+    for (int i = 0; i < vertices; i++) {
+        while (bucket_count[i] > 0) {
+            // get the last node in the bucket and update the bucket count
+            int u = buckets[i][--bucket_count[i]];
+
+            // get the edge of the node
+            const Edge* edge = nodes[u].head;
+
+            // process light edges (weight <= DELTA)
+            while (edge) {
+                if (edge->weight <= DELTA) {
+                    // calculate the new distance
+                    const float new_distance = dist[u] + edge->weight;
+                    // check if the distance is less than the current one
+                    if (new_distance < dist[edge->destination]) {
+                        // set the new distance for the next node
+                        dist[edge->destination] = new_distance;
+                        // set the previous of the next node
+                        prev[edge->destination] = u;
+                        // calculate the bucket where the next node belongs to
+                        const int new_bucket_index = (int) (new_distance / DELTA);
+                        // add the next node to the correct bucket
+                        add_to_bucket(buckets, bucket_count, new_bucket_index, edge->destination);
+                    }
+                }
+                // go to next edge
+                edge = edge->next;
+            }
+
+            // reset the edges
+            edge = nodes[u].head;
+
+            // process heavy edges (weight > DELTA)
+            while (edge) {
+                if (edge->weight > DELTA) {
+                    // calculate the new distance
+                    const float new_distance = dist[u] + edge->weight;
+                    // check if the distance is less than the current one
+                    if (new_distance < dist[edge->destination]) {
+                        // set the new distance for the next node
+                        dist[edge->destination] = new_distance;
+                        //set the previous of the next node
+                        prev[edge->destination] = u;
+                        // calculate the bucket where the next node belongs to
+                        const int new_bucket_index = (int) (new_distance / DELTA);
+                        // add the next node to the correct bucket
+                        add_to_bucket(buckets, bucket_count, new_bucket_index, edge->destination);
+                    }
+                }
+                // go to next edge
+                edge = edge->next;
+            }
+        }
+    }
+
+    // free the bucket memory
+    for (int i = 0; i < vertices; i++) {
+        free(buckets[i]);
+    }
 
     // After the loop, check if the target vertex has been reached
     if (dist[dest_index] != INF) {
         // Retrieve and print the path
-        PathNode* nodePath = NULL; // Initialize the linked list for the nodePath
         int current = dest_index;
 
-        // Trace back the path from destination to source
+        printf("\t\"route\": [");
         while (current != -1) {
-            appendToNodePath(&nodePath, nodes[current]); // Add the node to the linked list
+            printf("[%f, %f]", nodes[current].lat, nodes[current].lon);
             current = prev[current]; // Move to the previous node
+            if (current != -1) {
+                printf(", ");
+            }
         }
+        printf("],\n");
 
         printf("\t\"routeLength\": \"%.2fm\",\n", dist[dest_index]);
-        printNodePath(nodePath); // Print the nodePath
-        freeNodePath(nodePath);   // Free the allocated memory for the nodePath
         return 0;
     }
     fprintf(stderr, "Target cannot be reached from source\n");
-    return -1;
+    return 1;
 }
+
+
 
 int main(const int argc, char *argv[]) {
     // get the timestamp of the execution start
@@ -274,10 +394,18 @@ int main(const int argc, char *argv[]) {
 
     // Run Dijkstra's algorithm with the source and target IDs
     const clock_t routing_time_start = clock();  // Start the routing time
+    /*
     if (dijkstra(nodeCount, nodes, start_index, dest_index) != 0) {
         freeNodes(nodes, nodeCount);
         return 1;
     }
+    //*/
+    //*
+    if (deltaStepping(nodeCount, nodes, start_index, dest_index) != 0) {
+        freeNodes(nodes, nodeCount);
+        return 1;
+    }
+    //*/
 
     freeNodes(nodes, nodeCount);
 

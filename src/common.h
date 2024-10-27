@@ -9,7 +9,7 @@ typedef struct Edge {
 } Edge;
 
 // Define a struct to store the Nodes
-typedef struct {
+typedef struct Node {
     int64_t id;  // Node ID
     float lat;  // Latitude of the Node
     float lon;  // Longitude of the Node
@@ -17,7 +17,7 @@ typedef struct {
 } Node;
 
 // Define a struct to store the Roads
-typedef struct {
+typedef struct Road {
     int64_t id;  // Way ID
     int nodeCount;
     int64_t *nodes;  // Array of Node IDs
