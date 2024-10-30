@@ -17,6 +17,13 @@ include_directories(${CURL_INCLUDE_DIRS})
 # Find the cJSON library and include directories
 find_package(cjson REQUIRED)
 
+# ------ Open CL Check ------
+add_executable(OpenCL_check
+        src/check_opencl.c)
+
+# Link OpenCL to the parallel version
+target_link_libraries(OpenCL_check ${OpenCL_LIBRARIES})
+
 
 # ------ Serial Version --------
 
