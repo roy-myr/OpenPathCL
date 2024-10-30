@@ -23,19 +23,7 @@ typedef struct Road {
     int64_t *nodes;  // Array of Node IDs
 } Road;
 
-// Construct a linked list that resales a path through the graph
-typedef struct PathNode {
-    Node data;  // Data of the node
-    struct PathNode *next; // Pointer to the next node in the list
-} PathNode;
-
 // OpenPathCL functions that are the same in both the serial and parallel implementations
-
-// Functions for the path
-PathNode* createPathNode(const Node data);
-void appendToNodePath(PathNode** head, const Node data);
-void printNodePath(const PathNode* head);
-void freeNodePath(PathNode* head);
 
 // Functions for the data import
 int parseArguments(int argc, char* argv[], float start[2], float dest[2], float** bbox, int* bbox_size);
@@ -47,5 +35,10 @@ void getRoadNodes(
     int* nodeCount,
     Road** roads,
     int* roadCount);
+
+// debug functions
+void printNodes(const Node* nodes, const int nodeCount);
+void printRoads(const Road* roads, const int roadCount);
+void printGraph(const Node* nodes, const int nodeCount);
 
 #endif //COMMON_H

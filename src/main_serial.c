@@ -13,6 +13,9 @@
 
 #define DELTA 10.0 // The Delta value for bucket ranges, this can be tuned for optimal performance
 
+// Define an initial capacity for each bucket
+#define INITIAL_BUCKET_CAPACITY 10
+
 // Function for calculating the distance between two coordinated on earth
 float haversine(float lat1, const float lon1, float lat2, const float lon2) {
     const float lat_distance = (float) ((lat2 - lat1) * (M_PI / 180.0));
@@ -55,27 +58,35 @@ void createGraph(Node* nodes, const int nodeCount, const Road* roads, const int 
 
                 // Add edge from index1 to index2
                 Edge* newEdge1 = malloc(sizeof(Edge));
-                if (newEdge1) {
+                if (newEdge1 != NULL) {
                     newEdge1->destination = index2;
                     newEdge1->weight = distance;
                     newEdge1->next = nodes[index1].head;
                     nodes[index1].head = newEdge1;
+                } else {
+                    fprintf(stderr, "Failed to allocate memory for edge from %ld to %ld\n", nodeId1, nodeId2);
                 }
 
                 // Add edge from index2 to index1 (for undirected graph)
                 Edge* newEdge2 = malloc(sizeof(Edge));
-                if (newEdge2) {
+                if (newEdge2 != NULL) {
                     newEdge2->destination = index1;
                     newEdge2->weight = distance;
                     newEdge2->next = nodes[index2].head;
                     nodes[index2].head = newEdge2;
+                } else {
+                    fprintf(stderr, "Failed to allocate memory for edge from %ld to %ld\n", nodeId2, nodeId1);
                 }
+            } else {
+                fprintf(stderr, "Failed to find nodes with IDs %ld and/or %ld in nodes array\n", nodeId1, nodeId2);
             }
         }
     }
 }
 
-void freeNodes(Node* nodes, int nodeCount) {
+
+// Function to free the nodes memory
+void freeNodes(Node* nodes, const int nodeCount) {
     for (int i = 0; i < nodeCount; i++) {
         Edge* current = nodes[i].head;
         while (current != NULL) {
@@ -182,8 +193,27 @@ int dijkstra(
 }
 
 
-void add_to_bucket(int **buckets, int *bucket_count, const int index, const int node) {
-    // add the node to the bucket and increase the bucket count
+void add_to_bucket(int **buckets, int *bucket_count, int *bucket_capacity, const int index, const int node) {
+    // Check if the bucket needs to be initialized or resized
+    if (buckets[index] == NULL) {
+        // Allocate initial memory for the bucket
+        bucket_capacity[index] = INITIAL_BUCKET_CAPACITY;
+        buckets[index] = malloc(bucket_capacity[index] * sizeof(int));
+        if (buckets[index] == NULL) {
+            fprintf(stderr, "Failed to allocate memory for bucket %d\n", index);
+            exit(EXIT_FAILURE);
+        }
+    } else if (bucket_count[index] >= bucket_capacity[index]) {
+        // Resize the bucket if the count exceeds the current capacity
+        bucket_capacity[index] *= 2;  // Double the capacity
+        buckets[index] = realloc(buckets[index], bucket_capacity[index] * sizeof(int));
+        if (buckets[index] == NULL) {
+            fprintf(stderr, "Failed to reallocate memory for bucket %d\n", index);
+            exit(EXIT_FAILURE);
+        }
+    }
+
+    // Add the node to the bucket and increase the bucket count
     buckets[index][bucket_count[index]++] = node;
 }
 
@@ -197,27 +227,29 @@ int deltaStepping(
     float dist[vertices];     // Output array. dist[i] holds the shortest distance from src to i
     int prev[vertices];     // prev[i] stores the previous vertex in the path
 
-    // Initialize all distances as INFINITE, visited_map[] as false and previous as -1
+    // Initialize all distances as INFINITE and previous as -1
     for (int i = 0; i < vertices; i++) {
-        dist[i] = INF;
+        dist[i] = INF;  // Infinite distance to node
         prev[i] = -1; // Undefined previous vertex
     }
 
     // Distance of source vertex from itself is always 0
     dist[start_index] = 0;
 
-    // define the buckets array
-    int *buckets[vertices];
+    // Define the buckets array with dynamic resizing capability
+    int **buckets = malloc(vertices * sizeof(int *));
     int bucket_count[vertices];
+    int bucket_capacity[vertices];
 
-    // initialise the buckets array
+    // Initialize the buckets with an initial capacity and count
     for (int i = 0; i < vertices; i++) {
-        buckets[i] = malloc(vertices * sizeof(int));
+        buckets[i] = malloc(INITIAL_BUCKET_CAPACITY * sizeof(int));
         bucket_count[i] = 0;
+        bucket_capacity[i] = INITIAL_BUCKET_CAPACITY;
     }
 
     // add the start node to the first bucket
-    add_to_bucket(buckets, bucket_count, 0, start_index);
+    add_to_bucket(buckets, bucket_count, bucket_capacity, 0, start_index);
 
     // go through each Node
     for (int i = 0; i < vertices; i++) {
@@ -242,7 +274,7 @@ int deltaStepping(
                         // calculate the bucket where the next node belongs to
                         const int new_bucket_index = (int) (new_distance / DELTA);
                         // add the next node to the correct bucket
-                        add_to_bucket(buckets, bucket_count, new_bucket_index, edge->destination);
+                        add_to_bucket(buckets, bucket_count, bucket_capacity, new_bucket_index, edge->destination);
                     }
                 }
                 // go to next edge
@@ -266,7 +298,7 @@ int deltaStepping(
                         // calculate the bucket where the next node belongs to
                         const int new_bucket_index = (int) (new_distance / DELTA);
                         // add the next node to the correct bucket
-                        add_to_bucket(buckets, bucket_count, new_bucket_index, edge->destination);
+                        add_to_bucket(buckets, bucket_count, bucket_capacity, new_bucket_index, edge->destination);
                     }
                 }
                 // go to next edge
@@ -363,7 +395,6 @@ int main(const int argc, char *argv[]) {
 
     // free the not needed data
     free(bbox);
-    free(roads);
 
     // Find the index of the start and dest node
     int start_index = -1;
@@ -386,6 +417,9 @@ int main(const int argc, char *argv[]) {
 
     // Fill the Graph using the Roads Data
     createGraph(nodes, nodeCount, roads, roadCount);
+
+    // free the not needed data
+    free(roads);
 
     // end the graph time and prints its result
     const clock_t graph_time_end = clock();

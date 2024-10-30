@@ -18,13 +18,32 @@ void parseAndStoreJSON(const char* jsonResponse, Node** nodes, int* nodeCount, R
     *nodeCount = 0;
     int nodeCapacity = 10;
     *nodes = (Node*)malloc(nodeCapacity * sizeof(Node));
+    if (*nodes == NULL) {
+        perror("Initial memory allocation failed for nodes");
+        cJSON_Delete(root);
+        exit(EXIT_FAILURE);
+    }
 
     *roadCount = 0;
     int roadCapacity = 10;
     *roads = (Road*)malloc(roadCapacity * sizeof(Road));
+    if (*roads == NULL) {
+        perror("Initial memory allocation failed for roads");
+        free(*nodes);
+        cJSON_Delete(root);
+        exit(EXIT_FAILURE);
+    }
 
-    // Iterate through the JSON array of elements
+    // Retrieve and iterate through the JSON array of elements
     const cJSON *elements = cJSON_GetObjectItemCaseSensitive(root, "elements");
+    if (!cJSON_IsArray(elements)) {
+        fprintf(stderr, "\"elements\" is missing or not an array\n");
+        free(*nodes);
+        free(*roads);
+        cJSON_Delete(root);
+        return;
+    }
+
     cJSON *element = NULL;
     cJSON_ArrayForEach(element, elements) {
         const cJSON *type = cJSON_GetObjectItemCaseSensitive(element, "type");
@@ -51,7 +70,9 @@ void parseAndStoreJSON(const char* jsonResponse, Node** nodes, int* nodeCount, R
                     *nodes = (Node*)realloc(*nodes, nodeCapacity * sizeof(Node));
                     if (*nodes == NULL) {
                         perror("Memory reallocation failed for nodes");
-                        exit(EXIT_FAILURE);  // Handle failure
+                        free(*roads);
+                        cJSON_Delete(root);
+                        exit(EXIT_FAILURE);
                     }
                 }
             }
@@ -68,6 +89,13 @@ void parseAndStoreJSON(const char* jsonResponse, Node** nodes, int* nodeCount, R
 
                 // Allocate memory for the node IDs in this road
                 road.nodes = (int64_t*)malloc(road.nodeCount * sizeof(int64_t));
+                if (road.nodes == NULL) {
+                    perror("Memory allocation failed for road nodes");
+                    free(*nodes);
+                    free(*roads);
+                    cJSON_Delete(root);
+                    exit(EXIT_FAILURE);
+                }
 
                 int nodeIndex = 0;
                 const cJSON *nodeId = NULL;
@@ -88,8 +116,11 @@ void parseAndStoreJSON(const char* jsonResponse, Node** nodes, int* nodeCount, R
                     *roads = (Road*)realloc(*roads, roadCapacity * sizeof(Road));
                     if (*roads == NULL) {
                         perror("Memory reallocation failed for roads");
-                        exit(EXIT_FAILURE);  // Handle failure
-                    }               }
+                        free(*nodes);
+                        cJSON_Delete(root);
+                        exit(EXIT_FAILURE);
+                    }
+                }
             }
         }
     }
@@ -101,6 +132,55 @@ void parseAndStoreJSON(const char* jsonResponse, Node** nodes, int* nodeCount, R
     printf("\t\"roadsInBoundingBox\": %d,\n", *roadCount);
 }
 
+// Debug Print to retrieve Nodes
+void printNodes(const Node* nodes, const int nodeCount) {
+    printf("Nodes:\n");
+    for (int i = 0; i < nodeCount; i++) {
+        printf("Node %d:\n", i + 1);
+        printf("  ID: %ld\n", nodes[i].id);
+        printf("  Latitude: %f\n", nodes[i].lat);
+        printf("  Longitude: %f\n", nodes[i].lon);
+        // Print more details if needed, such as `head` if it’s used
+    }
+    printf("Total Nodes: %d\n\n", nodeCount);
+}
+
+// Debug Print to retrieve Roads
+void printRoads(const Road* roads, const int roadCount) {
+    printf("Roads:\n");
+    for (int i = 0; i < roadCount; i++) {
+        printf("Road %d:\n", i + 1);
+        printf("  ID: %ld\n", roads[i].id);
+        printf("  Node Count: %d\n", roads[i].nodeCount);
+        printf("  Node IDs: ");
+        for (int j = 0; j < roads[i].nodeCount; j++) {
+            printf("%ld ", roads[i].nodes[j]);
+        }
+        printf("\n");
+    }
+    printf("Total Roads: %d\n\n", roadCount);
+}
+
+void printGraph(const Node* nodes, const int nodeCount) {
+    printf("Graph:\n");
+    for (int i = 0; i < nodeCount; i++) {
+        printf("Node ID: %ld (Index: %d)\n", nodes[i].id, i);
+        printf("  Location: (Lat: %f, Lon: %f)\n", nodes[i].lat, nodes[i].lon);
+
+        // Print all edges connected to this node
+        Edge* edge = nodes[i].head;
+        if (edge == NULL) {
+            printf("  No edges connected to this node.\n");
+        } else {
+            printf("  Edges:\n");
+            while (edge != NULL) {
+                printf("    -> Destination Node Index: %d, Weight: %.2f\n", edge->destination, edge->weight);
+                edge = edge->next;
+            }
+        }
+        printf("\n");
+    }
+}
 
 // Structure to hold response data
 struct MemoryStruct {
