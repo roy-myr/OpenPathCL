@@ -11,7 +11,7 @@
 #define INF FLT_MAX
 #define EARTH_RADIUS 6371000  // Earth's radius in meters
 
-#define DELTA 1.0 // The Delta value for bucket ranges, this can be tuned for optimal performance
+#define DELTA 20.0 // The Delta value for bucket ranges, this can be tuned for optimal performance
 
 // Define an initial capacity for each bucket
 #define INITIAL_BUCKET_CAPACITY 10
@@ -191,62 +191,7 @@ int dijkstra(
     return 1;
 }
 
-
-// Structure to manage dynamic buckets
-typedef struct {
-    int **buckets;  // Array of integer arrays (each array is a bucket)
-    int *bucketSizes;  // Array to store the size (number of nodes) in each bucket
-    int numBuckets;  // Number of buckets currently allocated
-} BucketsArray;
-
-// Function to initialize the BucketsArray
-void initializeBuckets(BucketsArray *bucketsArray) {
-    bucketsArray->buckets = NULL;
-    bucketsArray->bucketSizes = NULL;
-    bucketsArray->numBuckets = 0;
-}
-
-// Function to resize the outer buckets array
-void resizeBuckets(BucketsArray *bucketsArray, const int newSize) {
-    bucketsArray->buckets = (int **)realloc(bucketsArray->buckets, newSize * sizeof(int *));
-    bucketsArray->bucketSizes = (int *)realloc(bucketsArray->bucketSizes, newSize * sizeof(int));
-    for (int i = bucketsArray->numBuckets; i < newSize; i++) {
-        bucketsArray->buckets[i] = NULL;    // Initialize new buckets to NULL
-        bucketsArray->bucketSizes[i] = 0;   // Initialize sizes to 0
-    }
-    bucketsArray->numBuckets = newSize;
-}
-
-// Function to add a node to a specific bucket, resizing if necessary
-void addNodeToBucket(BucketsArray *bucketsArray, const int bucketIndex, const int node_id) {
-    // Resize buckets array if needed
-    if (bucketIndex >= bucketsArray->numBuckets) {
-        resizeBuckets(bucketsArray, bucketIndex + 1);
-    }
-
-    // Get the current size of the bucket
-    int currentSize = bucketsArray->bucketSizes[bucketIndex];
-
-    // Resize the specific bucket to add another node
-    bucketsArray->buckets[bucketIndex] = (int *)realloc(bucketsArray->buckets[bucketIndex], (currentSize + 1) * sizeof(int));
-    bucketsArray->buckets[bucketIndex][currentSize] = node_id; // Add the new node
-    bucketsArray->bucketSizes[bucketIndex]++;  // Update the size
-}
-
-// Function to print a bucket's content
-void printBucket(const int *bucket, const int size) {
-    if (bucket == NULL || size == 0) {
-        printf("Bucket is empty.\n");
-        return;
-    }
-    printf("Bucket contents: [");
-    for (int i = 0; i < size; i++) {
-        printf("%d ", bucket[i]);
-    }
-    printf("]\n");
-}
-
-
+// Delta-Stepping algorithm
 int deltaStepping(
         const int vertices,
         Node nodes[],
@@ -332,10 +277,7 @@ int deltaStepping(
     }
 
     // Free each bucket's allocated memory
-    for (int i = 0; i < bucketsArray.numBuckets; i++) {
-        free(bucketsArray.buckets[i]);
-    }
-    free(bucketsArray.buckets);
+    freeBuckets(&bucketsArray);
 
     // After the loop, check if the target vertex has been reached
     if (dist[dest_index] != INF) {
