@@ -11,7 +11,7 @@
 #define INF FLT_MAX
 #define EARTH_RADIUS 6371000  // Earth's radius in meters
 
-#define DELTA 10.0 // The Delta value for bucket ranges, this can be tuned for optimal performance
+#define DELTA 1.0 // The Delta value for bucket ranges, this can be tuned for optimal performance
 
 // Define an initial capacity for each bucket
 #define INITIAL_BUCKET_CAPACITY 10
@@ -36,12 +36,11 @@ float haversine(float lat1, const float lon1, float lat2, const float lon2) {
 void createGraph(Node* nodes, const int nodeCount, const Road* roads, const int roadCount) {
     // Iterate through each road
     for (int i = 0; i < roadCount; i++) {
-        const Road road = roads[i];
 
         // Go through each pair of consecutive nodes in the road
-        for (int j = 0; j < road.nodeCount - 1; j++) {
-            const int64_t nodeId1 = road.nodes[j];
-            const int64_t nodeId2 = road.nodes[j + 1];
+        for (int j = 0; j < roads[i].nodeCount - 1; j++) {
+            const int64_t nodeId1 = roads[i].nodes[j];
+            const int64_t nodeId2 = roads[i].nodes[j + 1];
 
             // Find the indexes of nodeId1 and nodeId2 in the nodes array
             int index1 = -1, index2 = -1;
@@ -193,28 +192,58 @@ int dijkstra(
 }
 
 
-void add_to_bucket(int **buckets, int *bucket_count, int *bucket_capacity, const int index, const int node) {
-    // Check if the bucket needs to be initialized or resized
-    if (buckets[index] == NULL) {
-        // Allocate initial memory for the bucket
-        bucket_capacity[index] = INITIAL_BUCKET_CAPACITY;
-        buckets[index] = malloc(bucket_capacity[index] * sizeof(int));
-        if (buckets[index] == NULL) {
-            fprintf(stderr, "Failed to allocate memory for bucket %d\n", index);
-            exit(EXIT_FAILURE);
-        }
-    } else if (bucket_count[index] >= bucket_capacity[index]) {
-        // Resize the bucket if the count exceeds the current capacity
-        bucket_capacity[index] *= 2;  // Double the capacity
-        buckets[index] = realloc(buckets[index], bucket_capacity[index] * sizeof(int));
-        if (buckets[index] == NULL) {
-            fprintf(stderr, "Failed to reallocate memory for bucket %d\n", index);
-            exit(EXIT_FAILURE);
-        }
+// Structure to manage dynamic buckets
+typedef struct {
+    int **buckets;  // Array of integer arrays (each array is a bucket)
+    int *bucketSizes;  // Array to store the size (number of nodes) in each bucket
+    int numBuckets;  // Number of buckets currently allocated
+} BucketsArray;
+
+// Function to initialize the BucketsArray
+void initializeBuckets(BucketsArray *bucketsArray) {
+    bucketsArray->buckets = NULL;
+    bucketsArray->bucketSizes = NULL;
+    bucketsArray->numBuckets = 0;
+}
+
+// Function to resize the outer buckets array
+void resizeBuckets(BucketsArray *bucketsArray, const int newSize) {
+    bucketsArray->buckets = (int **)realloc(bucketsArray->buckets, newSize * sizeof(int *));
+    bucketsArray->bucketSizes = (int *)realloc(bucketsArray->bucketSizes, newSize * sizeof(int));
+    for (int i = bucketsArray->numBuckets; i < newSize; i++) {
+        bucketsArray->buckets[i] = NULL;    // Initialize new buckets to NULL
+        bucketsArray->bucketSizes[i] = 0;   // Initialize sizes to 0
+    }
+    bucketsArray->numBuckets = newSize;
+}
+
+// Function to add a node to a specific bucket, resizing if necessary
+void addNodeToBucket(BucketsArray *bucketsArray, const int bucketIndex, const int node_id) {
+    // Resize buckets array if needed
+    if (bucketIndex >= bucketsArray->numBuckets) {
+        resizeBuckets(bucketsArray, bucketIndex + 1);
     }
 
-    // Add the node to the bucket and increase the bucket count
-    buckets[index][bucket_count[index]++] = node;
+    // Get the current size of the bucket
+    int currentSize = bucketsArray->bucketSizes[bucketIndex];
+
+    // Resize the specific bucket to add another node
+    bucketsArray->buckets[bucketIndex] = (int *)realloc(bucketsArray->buckets[bucketIndex], (currentSize + 1) * sizeof(int));
+    bucketsArray->buckets[bucketIndex][currentSize] = node_id; // Add the new node
+    bucketsArray->bucketSizes[bucketIndex]++;  // Update the size
+}
+
+// Function to print a bucket's content
+void printBucket(const int *bucket, const int size) {
+    if (bucket == NULL || size == 0) {
+        printf("Bucket is empty.\n");
+        return;
+    }
+    printf("Bucket contents: [");
+    for (int i = 0; i < size; i++) {
+        printf("%d ", bucket[i]);
+    }
+    printf("]\n");
 }
 
 
@@ -237,44 +266,37 @@ int deltaStepping(
     dist[start_index] = 0;
 
     // Define the buckets array with dynamic resizing capability
-    int **buckets = malloc(vertices * sizeof(int *));
-    int bucket_count[vertices];
-    int bucket_capacity[vertices];
-
-    // Initialize the buckets with an initial capacity and count
-    for (int i = 0; i < vertices; i++) {
-        buckets[i] = malloc(INITIAL_BUCKET_CAPACITY * sizeof(int));
-        bucket_count[i] = 0;
-        bucket_capacity[i] = INITIAL_BUCKET_CAPACITY;
-    }
+    BucketsArray bucketsArray;
+    initializeBuckets(&bucketsArray);
 
     // add the start node to the first bucket
-    add_to_bucket(buckets, bucket_count, bucket_capacity, 0, start_index);
+    addNodeToBucket(&bucketsArray, 0, start_index);
 
-    // go through each Node
-    for (int i = 0; i < vertices; i++) {
-        while (bucket_count[i] > 0) {
-            // get the last node in the bucket and update the bucket count
-            int u = buckets[i][--bucket_count[i]];
+    // go through each Bucket
+    int bucket_id = 0;
+    while (bucket_id < bucketsArray.numBuckets) {
+        // go through each node inside the bucket
+        for (int i = 0; i < bucketsArray.bucketSizes[bucket_id]; i++) {
+            const int node = bucketsArray.buckets[bucket_id][i];
 
             // get the edge of the node
-            const Edge* edge = nodes[u].head;
+            const Edge* edge = nodes[node].head;
 
             // process light edges (weight <= DELTA)
             while (edge) {
                 if (edge->weight <= DELTA) {
                     // calculate the new distance
-                    const float new_distance = dist[u] + edge->weight;
+                    const float new_distance = dist[node] + edge->weight;
                     // check if the distance is less than the current one
                     if (new_distance < dist[edge->destination]) {
                         // set the new distance for the next node
                         dist[edge->destination] = new_distance;
                         // set the previous of the next node
-                        prev[edge->destination] = u;
+                        prev[edge->destination] = node;
                         // calculate the bucket where the next node belongs to
                         const int new_bucket_index = (int) (new_distance / DELTA);
                         // add the next node to the correct bucket
-                        add_to_bucket(buckets, bucket_count, bucket_capacity, new_bucket_index, edge->destination);
+                        addNodeToBucket(&bucketsArray, new_bucket_index, edge->destination);
                     }
                 }
                 // go to next edge
@@ -282,35 +304,38 @@ int deltaStepping(
             }
 
             // reset the edges
-            edge = nodes[u].head;
+            edge = nodes[node].head;
 
             // process heavy edges (weight > DELTA)
             while (edge) {
                 if (edge->weight > DELTA) {
                     // calculate the new distance
-                    const float new_distance = dist[u] + edge->weight;
+                    const float new_distance = dist[node] + edge->weight;
                     // check if the distance is less than the current one
                     if (new_distance < dist[edge->destination]) {
                         // set the new distance for the next node
                         dist[edge->destination] = new_distance;
                         //set the previous of the next node
-                        prev[edge->destination] = u;
+                        prev[edge->destination] = node;
                         // calculate the bucket where the next node belongs to
                         const int new_bucket_index = (int) (new_distance / DELTA);
                         // add the next node to the correct bucket
-                        add_to_bucket(buckets, bucket_count, bucket_capacity, new_bucket_index, edge->destination);
+                        addNodeToBucket(&bucketsArray, new_bucket_index, edge->destination);
                     }
                 }
                 // go to next edge
                 edge = edge->next;
             }
         }
+
+        bucket_id++;
     }
 
-    // free the bucket memory
-    for (int i = 0; i < vertices; i++) {
-        free(buckets[i]);
+    // Free each bucket's allocated memory
+    for (int i = 0; i < bucketsArray.numBuckets; i++) {
+        free(bucketsArray.buckets[i]);
     }
+    free(bucketsArray.buckets);
 
     // After the loop, check if the target vertex has been reached
     if (dist[dest_index] != INF) {
@@ -333,7 +358,6 @@ int deltaStepping(
     fprintf(stderr, "Target cannot be reached from source\n");
     return 1;
 }
-
 
 
 int main(const int argc, char *argv[]) {
