@@ -24,8 +24,7 @@ add_executable(OpenCL_check
 # Link OpenCL to the parallel version
 target_link_libraries(OpenCL_check ${OpenCL_LIBRARIES})
 
-
-# ------ Serial Version --------
+# ------ Serial Version ------
 
 # Add the serial version executable
 add_executable(OpenPathCL_serial
@@ -39,8 +38,24 @@ target_link_libraries(OpenPathCL_serial ${CURL_LIBRARIES})
 # Add cJSON to the serial version
 target_link_libraries(OpenPathCL_serial cjson)
 
+# ------ Parallelizable Version ------
 
-# ------ Parallel Version --------
+# Add the parallel version executable
+add_executable(OpenPathCL_parallelizable
+        src/main_parallelizable.c
+        src/common.c
+        src/common.h)
+
+# Link CURL to the parallel version
+target_link_libraries(OpenPathCL_parallelizable ${CURL_LIBRARIES})
+
+# Add cJSON to the parallel version
+target_link_libraries(OpenPathCL_parallelizable cjson)
+
+# Link OpenCL to the parallel version
+target_link_libraries(OpenPathCL_parallelizable ${OpenCL_LIBRARIES})
+
+# ------ Parallel Version ------
 
 # Add the parallel version executable
 add_executable(OpenPathCL_parallel
@@ -57,7 +72,7 @@ target_link_libraries(OpenPathCL_parallel cjson)
 # Link OpenCL to the parallel version
 target_link_libraries(OpenPathCL_parallel ${OpenCL_LIBRARIES})
 
-# ------ Webserver --------
+# ------ Webserver ------
 
 # Add the webserver executable
 add_executable(OpenPathCL_webserver
