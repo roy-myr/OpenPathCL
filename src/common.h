@@ -59,6 +59,7 @@ void freeBuckets(BucketsArray *bucketsArray);
 void printNodes(const Node* nodes, const int nodeCount);
 void printRoads(const Road* roads, const int roadCount);
 void printGraph(const Node* nodes, const int nodeCount);
+void writeGraphToMermaidFile(const Node* nodes, const int nodeCount);
 void printBucket(const int *bucket, const int size);
 
 #endif //COMMON_H

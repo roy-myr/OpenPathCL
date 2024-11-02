@@ -182,6 +182,36 @@ void printGraph(const Node* nodes, const int nodeCount) {
     }
 }
 
+void writeGraphToMermaidFile(const Node* nodes, const int nodeCount) {
+    FILE* file = fopen("graph.md", "w");
+    if (file == NULL) {
+        fprintf(stderr, "Error: Could not open graph.md for writing.\n");
+        return;
+    }
+
+    // Write the Mermaid header for a graph
+    fprintf(file, "```mermaid\ngraph TD\n");
+
+    // Write each node and its edges
+    for (int i = 0; i < nodeCount; i++) {
+        fprintf(file, "    %ld[\"Node %ld (%d)<br/>(%.6f, %.6f)\"]\n",
+                nodes[i].id, nodes[i].id, i, nodes[i].lat, nodes[i].lon);
+
+        // Process each edge connected to the node
+        Edge* edge = nodes[i].head;
+        while (edge != NULL) {
+            // Write the edge with weight as a label
+            fprintf(file, "    %ld -->|%.2fm| %ld\n", nodes[i].id, edge->weight, nodes[edge->destination].id);
+            edge = edge->next;
+        }
+    }
+
+    // Close the Mermaid code block
+    fprintf(file, "```\n");
+    fclose(file);
+}
+
+
 static size_t WriteMemoryCallback(const void* contents, const size_t size, size_t nmemb, void* userp) {
     size_t realSize = size * nmemb;
     struct MemoryStruct* mem = userp;
