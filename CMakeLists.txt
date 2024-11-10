@@ -24,35 +24,49 @@ add_executable(OpenCL_check
 # Link OpenCL to the parallel version
 target_link_libraries(OpenCL_check ${OpenCL_LIBRARIES})
 
-# ------ Serial Version ------
+# ------ Serial Dijkstra Version ------
 
-# Add the serial version executable
-add_executable(OpenPathCL_serial
-        src/main_serial.c
+# Add the serial Dijkstra version executable
+add_executable(OpenPathCL_serial_dijkstra
+        src/main_serial_dijkstra.c
         src/common.c
         src/common.h)
 
-# Link CURL to the serial version
-target_link_libraries(OpenPathCL_serial ${CURL_LIBRARIES})
+# Link CURL to the serial Dijkstra version
+target_link_libraries(OpenPathCL_serial_dijkstra ${CURL_LIBRARIES})
 
-# Add cJSON to the serial version
-target_link_libraries(OpenPathCL_serial cjson)
+# Add cJSON to the serial Dijkstra version
+target_link_libraries(OpenPathCL_serial_dijkstra cjson)
+
+# ------ Serial Delta Version ------
+
+# Add the serial delta stepping version executable
+add_executable(OpenPathCL_serial_delta
+        src/main_serial_delta.c
+        src/common.c
+        src/common.h)
+
+# Link CURL to the serial delta stepping version
+target_link_libraries(OpenPathCL_serial_delta ${CURL_LIBRARIES})
+
+# Add cJSON to the serial delta stepping version
+target_link_libraries(OpenPathCL_serial_delta cjson)
 
 # ------ Parallelizable Version ------
 
-# Add the parallel version executable
+# Add the parallelizable version executable
 add_executable(OpenPathCL_parallelizable
         src/main_parallelizable.c
         src/common.c
         src/common.h)
 
-# Link CURL to the parallel version
+# Link CURL to the parallelizable version
 target_link_libraries(OpenPathCL_parallelizable ${CURL_LIBRARIES})
 
-# Add cJSON to the parallel version
+# Add cJSON to the parallelizable version
 target_link_libraries(OpenPathCL_parallelizable cjson)
 
-# Link OpenCL to the parallel version
+# Link OpenCL to the parallelizable version
 target_link_libraries(OpenPathCL_parallelizable ${OpenCL_LIBRARIES})
 
 # ------ Parallel Version ------

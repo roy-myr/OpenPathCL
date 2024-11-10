@@ -191,116 +191,6 @@ int dijkstra(
     return 1;
 }
 
-// Delta-Stepping algorithm
-int deltaStepping(
-        const int vertices,
-        Node nodes[],
-        const int start_index,
-        const int dest_index) {
-
-    float dist[vertices];     // Output array. dist[i] holds the shortest distance from src to i
-    int prev[vertices];     // prev[i] stores the previous vertex in the path
-
-    // Initialize all distances as INFINITE and previous as -1
-    for (int i = 0; i < vertices; i++) {
-        dist[i] = INF;  // Infinite distance to node
-        prev[i] = -1; // Undefined previous vertex
-    }
-
-    // Distance of source vertex from itself is always 0
-    dist[start_index] = 0;
-
-    // Define the buckets array with dynamic resizing capability
-    BucketsArray bucketsArray;
-    initializeBuckets(&bucketsArray);
-
-    // add the start node to the first bucket
-    addNodeToBucket(&bucketsArray, 0, start_index);
-
-    // go through each Bucket
-    int bucket_id = 0;
-    while (bucket_id < bucketsArray.numBuckets) {
-        // go through each node inside the bucket
-        for (int i = 0; i < bucketsArray.bucketSizes[bucket_id]; i++) {
-            const int node = bucketsArray.buckets[bucket_id][i];
-
-            // get the edge of the node
-            const Edge* edge = nodes[node].head;
-
-            // process light edges (weight <= DELTA)
-            while (edge) {
-                if (edge->weight <= DELTA) {
-                    // calculate the new distance
-                    const float new_distance = dist[node] + edge->weight;
-                    // check if the distance is less than the current one
-                    if (new_distance < dist[edge->destination]) {
-                        // set the new distance for the next node
-                        dist[edge->destination] = new_distance;
-                        // set the previous of the next node
-                        prev[edge->destination] = node;
-                        // calculate the bucket where the next node belongs to
-                        const int new_bucket_index = (int) (new_distance / DELTA);
-                        // add the next node to the correct bucket
-                        addNodeToBucket(&bucketsArray, new_bucket_index, edge->destination);
-                    }
-                }
-                // go to next edge
-                edge = edge->next;
-            }
-
-            // reset the edges
-            edge = nodes[node].head;
-
-            // process heavy edges (weight > DELTA)
-            while (edge) {
-                if (edge->weight > DELTA) {
-                    // calculate the new distance
-                    const float new_distance = dist[node] + edge->weight;
-                    // check if the distance is less than the current one
-                    if (new_distance < dist[edge->destination]) {
-                        // set the new distance for the next node
-                        dist[edge->destination] = new_distance;
-                        //set the previous of the next node
-                        prev[edge->destination] = node;
-                        // calculate the bucket where the next node belongs to
-                        const int new_bucket_index = (int) (new_distance / DELTA);
-                        // add the next node to the correct bucket
-                        addNodeToBucket(&bucketsArray, new_bucket_index, edge->destination);
-                    }
-                }
-                // go to next edge
-                edge = edge->next;
-            }
-        }
-
-        bucket_id++;
-    }
-
-    // Free each bucket's allocated memory
-    freeBuckets(&bucketsArray);
-
-    // After the loop, check if the target vertex has been reached
-    if (dist[dest_index] != INF) {
-        // Retrieve and print the path
-        int current = dest_index;
-
-        printf("\t\"route\": [");
-        while (current != -1) {
-            printf("[%f, %f]", nodes[current].lat, nodes[current].lon);
-            current = prev[current]; // Move to the previous node
-            if (current != -1) {
-                printf(", ");
-            }
-        }
-        printf("],\n");
-
-        printf("\t\"routeLength\": \"%.2fm\",\n", dist[dest_index]);
-        return 0;
-    }
-    fprintf(stderr, "Target cannot be reached from source\n");
-    return 1;
-}
-
 
 int main(const int argc, char *argv[]) {
     // get the timestamp of the execution start
@@ -394,18 +284,11 @@ int main(const int argc, char *argv[]) {
 
     // Run Dijkstra's algorithm with the source and target IDs
     const clock_t routing_time_start = clock();  // Start the routing time
-    /*
+
     if (dijkstra(nodeCount, nodes, start_index, dest_index) != 0) {
         freeNodes(nodes, nodeCount);
         return 1;
     }
-    //*/
-    //*
-    if (deltaStepping(nodeCount, nodes, start_index, dest_index) != 0) {
-        freeNodes(nodes, nodeCount);
-        return 1;
-    }
-    //*/
 
     freeNodes(nodes, nodeCount);
 

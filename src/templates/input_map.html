@@ -24,7 +24,7 @@
         }
         #sidebar {
             flex: 0 0 auto; /* 25% of the width */
-            min-width: 450px;
+            width: 450px;
             display: flex;
             flex-direction: column;
             justify-content: flex-start; /* Align content to the top */
@@ -207,34 +207,40 @@
 
         <h2>Select Algorithm</h2>
         <div id="toggleButtons">
-            <button id="btnParallel" class="toggle-button selected">Parallel</button>
-            <button id="btnSerial" class="toggle-button">Serial</button>
+            <button id="btnSerialDijkstra" class="toggle-button selected">Dijkstra</button>
+            <button id="btnSerialDelta" class="toggle-button">&Delta;-Stepping</button>
             <button id="btnParallelizable" class="toggle-button">Parallelizable</button>
+            <button id="btnParallel" class="toggle-button">Parallel</button>
         </div>
 
         <script>
             // Get the button elements
-            const btnParallel = document.getElementById('btnParallel');
-            const btnSerial = document.getElementById('btnSerial');
+            const btnSerialDijkstra = document.getElementById('btnSerialDijkstra');
+            const btnSerialDelta = document.getElementById('btnSerialDelta');
             const btnParallelizable = document.getElementById('btnParallelizable');
+            const btnParallel = document.getElementById('btnParallel');
 
             // Add click event listeners to the buttons
-            btnParallel.addEventListener('click', () => {
-                setSelectedAlgorithm(btnParallel);
+            btnSerialDijkstra.addEventListener('click', () => {
+                setSelectedAlgorithm(btnSerialDijkstra);
             });
 
-            btnSerial.addEventListener('click', () => {
-                setSelectedAlgorithm(btnSerial);
+            btnSerialDelta.addEventListener('click', () => {
+                setSelectedAlgorithm(btnSerialDelta);
             });
 
             btnParallelizable.addEventListener('click', () => {
                 setSelectedAlgorithm(btnParallelizable);
             });
 
+            btnParallel.addEventListener('click', () => {
+                setSelectedAlgorithm(btnParallel);
+            });
+
             // Function to handle selection of algorithm buttons
             function setSelectedAlgorithm(selectedButton) {
                 // Remove 'selected' class from all buttons
-                [btnParallel, btnSerial, btnParallelizable].forEach(button => button.classList.remove('selected'));
+                [btnSerialDijkstra, btnSerialDelta, btnParallelizable, btnParallel].forEach(button => button.classList.remove('selected'));
                 // Add 'selected' class to the selected button
                 selectedButton.classList.add('selected');
             }
@@ -415,16 +421,18 @@
 
         // Determine the selected algorithm
         let selectedAlgorithm;
-        if (btnParallel.classList.contains('selected')) {
-            selectedAlgorithm = 'parallel';
-        } else if (btnSerial.classList.contains('selected')) {
-            selectedAlgorithm = 'serial';
-        } else if (btnParallelizable.classList.contains('selected')) { // Corrected spelling here
+        if (btnSerialDijkstra.classList.contains('selected')) {
+            selectedAlgorithm = 'serial_dijkstra';
+        } else if (btnSerialDelta.classList.contains('selected')) {
+            selectedAlgorithm = 'serial_delta';
+        } else if (btnParallelizable.classList.contains('selected')) {
             selectedAlgorithm = 'parallelizable';
+        } else if (btnParallel.classList.contains('selected')) {
+            selectedAlgorithm = 'parallel';
         }
 
         const data = {
-            algorithm: selectedAlgorithm,  // Add the selected algorithm here
+            algorithm: selectedAlgorithm,  // Add the selected algorithm
             bbox: drawnShape instanceof L.Rectangle
                 ? [
                     [drawnShape.getBounds().getNorthWest().lat, drawnShape.getBounds().getNorthWest().lng],

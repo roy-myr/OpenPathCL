@@ -278,9 +278,18 @@
     function showResults(data) {
         console.log("Data:", data)
 
+        // Map the algorithm identifier to a more descriptive name
+        const algorithmNames = {
+            'serial_dijkstra': 'Dijkstra',
+            'serial_delta': '&Delta;-Stepping',
+            'parallelizable': 'Parallelizable',
+            'parallel': 'Parallel'
+        };
+        const algorithmDisplayName = algorithmNames[inputData.algorithm] || inputData.algorithm;
+
         document.getElementById('startNode').innerText = data.startNode;
         document.getElementById('startCoords').innerText = inputData.start[0] + ", " + inputData.start[1]
-        document.getElementById('algorithm').innerText = inputData.algorithm.charAt(0).toUpperCase() + inputData.algorithm.slice(1);
+        document.getElementById('algorithm').innerHTML = algorithmDisplayName;
         document.getElementById('destNode').innerText = data.destNode;
         document.getElementById('destCoords').innerText = inputData.dest[0] + ", " + inputData.dest[1];
         document.getElementById('nodesInBoundingBox').innerText = data.nodesInBoundingBox;
