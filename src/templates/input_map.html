@@ -53,7 +53,7 @@
         }
         button {
             width: 140px;
-            margin: 10px 0; /* Add spacing between buttons */
+            margin: 2px 0; /* Add spacing between buttons */
             padding: 10px 15px; /* Padding for the buttons */
             border: none; /* Remove border */
             border-radius: 5px; /* Rounded corners */
@@ -209,24 +209,37 @@
         <div id="toggleButtons">
             <button id="btnParallel" class="toggle-button selected">Parallel</button>
             <button id="btnSerial" class="toggle-button">Serial</button>
+            <button id="btnParallelizable" class="toggle-button">Parallelizable</button>
         </div>
 
         <script>
             // Get the button elements
             const btnParallel = document.getElementById('btnParallel');
             const btnSerial = document.getElementById('btnSerial');
+            const btnParallelizable = document.getElementById('btnParallelizable');
 
-            // Add click event listeners to both buttons
+            // Add click event listeners to the buttons
             btnParallel.addEventListener('click', () => {
-                btnParallel.classList.add('selected'); // Add 'selected' class to Parallel
-                btnSerial.classList.remove('selected'); // Remove 'selected' class from Serial
+                setSelectedAlgorithm(btnParallel);
             });
 
             btnSerial.addEventListener('click', () => {
-                btnSerial.classList.add('selected'); // Add 'selected' class to Serial
-                btnParallel.classList.remove('selected'); // Remove 'selected' class from Parallel
+                setSelectedAlgorithm(btnSerial);
             });
+
+            btnParallelizable.addEventListener('click', () => {
+                setSelectedAlgorithm(btnParallelizable);
+            });
+
+            // Function to handle selection of algorithm buttons
+            function setSelectedAlgorithm(selectedButton) {
+                // Remove 'selected' class from all buttons
+                [btnParallel, btnSerial, btnParallelizable].forEach(button => button.classList.remove('selected'));
+                // Add 'selected' class to the selected button
+                selectedButton.classList.add('selected');
+            }
         </script>
+
 
     </div>
 
@@ -401,9 +414,16 @@
         }
 
         // Determine the selected algorithm
-        const selectedAlgorithm = btnParallel.classList.contains('selected') ? 'parallel' : 'serial';
+        let selectedAlgorithm;
+        if (btnParallel.classList.contains('selected')) {
+            selectedAlgorithm = 'parallel';
+        } else if (btnSerial.classList.contains('selected')) {
+            selectedAlgorithm = 'serial';
+        } else if (btnParallelizable.classList.contains('selected')) { // Corrected spelling here
+            selectedAlgorithm = 'parallelizable';
+        }
 
-        var data = {
+        const data = {
             algorithm: selectedAlgorithm,  // Add the selected algorithm here
             bbox: drawnShape instanceof L.Rectangle
                 ? [
@@ -414,18 +434,15 @@
                 ]
                 : drawnShape.getLatLngs()[0].flatMap(function (point) {
                     return [[point.lat, point.lng]];
-                }), // For polygon, flatten lat/lng array
+                }),
             start: [startPointMarker.getLatLng().lat, startPointMarker.getLatLng().lng],
             dest: [endPointMarker.getLatLng().lat, endPointMarker.getLatLng().lng]
         };
 
-        // Log the data
         console.log(data);
 
-        // Store data in local storage
         localStorage.setItem('inputData', JSON.stringify(data));
 
-        // POST data to backend
         fetch('/submit', {
             method: 'GET'
         })
@@ -433,16 +450,17 @@
                 if (!response.ok) {
                     throw new Error('Network response was not ok');
                 }
-                return response.text(); // Get the HTML response
+                return response.text();
             })
             .then(html => {
-                // Replace the entire document content with the new HTML
                 document.open();
                 document.write(html);
                 document.close();
             })
             .catch((error) => console.error('Error:', error));
     });
+
+
 
     // Function to clear the area (remove drawn shapes and markers)
     // Function to clear only the drawn shape (without removing start/end markers)

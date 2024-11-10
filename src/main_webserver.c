@@ -127,6 +127,8 @@ void handle_form_submission(int client_fd, char *request_body) {
     // Construct the full path to the executable
     if (strcmp(algorithm->valuestring, "parallel") == 0) {
         snprintf(full_program_path, PATH_MAX, "%s/OpenPathCL_parallel", cwd);
+    } else if (strcmp(algorithm->valuestring, "parallelizable") == 0) {
+        snprintf(full_program_path, PATH_MAX, "%s/OpenPathCL_parallelizable", cwd);
     } else if (strcmp(algorithm->valuestring, "serial") == 0) {
         snprintf(full_program_path, PATH_MAX, "%s/OpenPathCL_serial", cwd);
     } else {
