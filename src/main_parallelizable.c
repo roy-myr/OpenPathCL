@@ -373,18 +373,18 @@ int deltaStepping(
         // cl_status = clEnqueueNDRangeKernel(queue, kernel, 1, NULL, globalWorkSize, NULL, 0, NULL, NULL);
         // CHECK_ERROR(cl_status, "clEnqueueNDRangeKernel")
         for (int i = 0; i < bucketsArray.bucketSizes[bucket_id]; i++) {
-            int node = bucketsArray.buckets[bucket_id][i];
+            const int node = bucketsArray.buckets[bucket_id][i];
 
-            if (edges_start[node] != edges_start[node + 1] || edges_start[node] != edge_count) {
-                int edge_end;
-                if (node != vertices - 1) {
-                    edge_end = edges_start[node + 1];
-                } else {
-                    edge_end = edge_count;
-                }
+            // Check if node is the last index to avoid out-of-bounds access
+            // Check if the nodes has next nodes
+            if ((node < vertices - 1 && edges_start[node] != edges_start[node + 1]) ||
+                (node == vertices - 1 && edges_start[node] != edge_count)) {
+
+                int edge_end = (node == vertices - 1) ? edge_count : edges_start[node + 1];
+
                 for (int edge = edges_start[node]; edge < edge_end; edge++) {
                     // calculate the new distance
-                    float new_dist = dist[node] + edge_weights[edge];
+                    const float new_dist = dist[node] + edge_weights[edge];
 
                     // check if the new distance is sorter that the previous one
                     if (dist[edge_destinations[edge]] > new_dist) {
