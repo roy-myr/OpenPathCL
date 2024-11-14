@@ -152,7 +152,7 @@ void convert_to_device_arrays(
     }
 }
 
-int deltaStepping(
+int parallelizableDeltaStepping(
         const int vertices,
         Node nodes[],
         const int start_index,
@@ -371,7 +371,7 @@ int main(const int argc, char *argv[]) {
 
     // Run Dijkstra's algorithm with the source and target IDs
     const clock_t routing_time_start = clock();  // Start the routing time
-    if (deltaStepping(nodeCount, nodes, start_index, dest_index) != 0) {
+    if (parallelizableDeltaStepping(nodeCount, nodes, start_index, dest_index) != 0) {
         freeNodes(nodes, nodeCount);
         return 1;
     }
