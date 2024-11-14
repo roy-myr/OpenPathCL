@@ -1,6 +1,5 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdbool.h> // For boolean data types
 #include <float.h>  // For FLT_MAX
 #include <math.h>  // for Pi, sin, cos, atan and sqrt
 #include <string.h>
@@ -10,64 +9,10 @@
 
 #include "common.h"  // Include the common header
 
-// set OpenCL Version
-#define CL_TARGET_OPENCL_VERSION 120
-
-// define opencl platform and device within it
-#define OPENCL_CL_PLAT 0
-#define OPENCL_DEVICE 1
-
 #define INF FLT_MAX
 #define EARTH_RADIUS 6371000  // Earth's radius in meters
 
-#define DELTA 200.0 // The Delta value for bucket ranges, this can be tuned for optimal performance
-
-#define CHECK_ERROR(err, msg) \
-    if (err != CL_SUCCESS) { \
-    fprintf(stderr, "%s failed with error code %d\n", msg, err); \
-    exit(EXIT_FAILURE); \
-    }
-
-const char* kernel_source =
-"__kernel void process_bucket_nodes(                                                \n"
-"   __global float* dist,                                                           \n"
-"   __global int* prev,                                                             \n"
-"   __global const int* edges_start,                                                \n"
-"   __global const int* edge_destinations,                                          \n"
-"   __global const float* edge_weights,                                             \n"
-"   __global const int* bucket_nodes,                                               \n"
-"   __global int* nodes_2_bucket,                                                   \n"
-"   const float delta,                                                              \n"
-"   const int vertices,                                                             \n"
-"   const int current_bucket                                                        \n"
-") {                                                                                \n"
-"   int node = bucket_nodes[get_global_id(0)];                                      \n"
-"   if (edges_start[node] != edges_start[node + 1] || node + 1 != vertices) {       \n"
-"       for (int edge = edges_start[node]; edge < edges_start[node + 1]; edge++) {  \n"
-"           // calculate the new distance                                           \n"
-"           float new_dist = dist[node] + edge_weights[edge];                       \n"
-"                                                                                   \n"
-"           // check if the new distance is sorter that the previous one            \n"
-"           if (dist[edge_destinations[edge]] > new_dist) {                         \n"
-"               // update the dest and prev of the next node                        \n"
-"               dist[edge_destinations[edge]] = new_dist;                           \n"
-"               prev[edge_destinations[edge]] = node;                               \n"
-"                                                                                   \n"
-"               // calculate the bucket of the next node                            \n"
-"               int next_bucket = (int)(new_dist / delta) + 1;                      \n"
-"                                                                                   \n"
-"               // check if the bucket is one that isn't done yet                   \n"
-"               if (next_bucket <= current_bucket) {                                \n"
-"                   // if not set the bucket tto the next one coming                \n"
-"                   next_bucket = current_bucket + 1;                               \n"
-"               }                                                                   \n"
-"                                                                                   \n"
-"               // set the bucket of the next node                                  \n"
-"               nodes_2_bucket[edge_destinations[edge]] = next_bucket;              \n"
-"           }                                                                       \n"
-"       }                                                                           \n"
-"   }                                                                               \n"
-"}";
+#define DELTA 40.0 // The Delta value for bucket ranges, this can be tuned for optimal performance
 
 // Function for calculating the distance between two coordinated on earth
 float haversine(float lat1, const float lon1, float lat2, const float lon2) {
@@ -207,7 +152,6 @@ void convert_to_device_arrays(
     }
 }
 
-
 int deltaStepping(
         const int vertices,
         Node nodes[],
@@ -250,106 +194,6 @@ int deltaStepping(
     int edge_count = 0;
     convert_to_device_arrays(nodes, vertices, edges_start, &edge_destinations, &edge_weights, &edge_count);
 
-    /*
-    // ---- Initialize OpenCL ----
-
-    // Variable to check the output of the opencl API calls
-    cl_int cl_status;
-
-    // get the number of platforms
-    cl_uint numPlatforms = 0;
-    cl_status = clGetPlatformIDs(0, NULL, &numPlatforms);
-    CHECK_ERROR(cl_status, "clGetPlatformIDs")
-
-    // Allocate space for each platform
-    cl_platform_id *platforms = NULL;
-    platforms = (cl_platform_id *) malloc(numPlatforms * sizeof(cl_platform_id));
-
-    // Fill the platforms
-    cl_status = clGetPlatformIDs(numPlatforms, platforms, NULL);
-    CHECK_ERROR(cl_status, "clGetPlatformIDs")
-
-    // Retrieve the number of devices for the selected platform
-    cl_uint numDevices = 0;
-    cl_status = clGetDeviceIDs(platforms[OPENCL_CL_PLAT], CL_DEVICE_TYPE_GPU, 0, NULL, &numDevices);
-    CHECK_ERROR(cl_status, "clGetDeviceIDs")
-
-    // Allocate space for each device
-    cl_device_id *devices;
-    devices = (cl_device_id *) malloc(numDevices * sizeof(cl_device_id));
-
-    // Fill in the devices of the selected platform
-    cl_status = clGetDeviceIDs(platforms[OPENCL_CL_PLAT], CL_DEVICE_TYPE_GPU, numDevices, devices, NULL);
-    CHECK_ERROR(cl_status, "clGetDeviceIDs")
-
-    // create the OpenCL context
-    cl_context context = clCreateContext(NULL, numDevices, devices, NULL, NULL, &cl_status);
-    CHECK_ERROR(cl_status, "clCreateContext")
-
-    // create the command queue
-    cl_command_queue queue = clCreateCommandQueue(context, devices[OPENCL_DEVICE], 0, &cl_status);
-    CHECK_ERROR(cl_status, "clCreateCommandQueue")
-
-    // create and build the program
-    cl_program program = clCreateProgramWithSource(context, 1, (const char **) &kernel_source, NULL, &cl_status);
-    CHECK_ERROR(cl_status, "clCreateProgramWithSource")
-    cl_status = clBuildProgram(program, numDevices, devices, NULL, NULL, NULL);
-    CHECK_ERROR(cl_status, "clBuildProgram")
-
-    // create the kernel
-    cl_kernel kernel = clCreateKernel(program, "process_bucket_nodes", &cl_status);
-    CHECK_ERROR(cl_status, "clCreateKernel")
-
-    // create buffers for device data
-    cl_mem dist_buffer = clCreateBuffer(context, CL_MEM_READ_WRITE, vertices * sizeof(float), NULL, &cl_status);
-    CHECK_ERROR(cl_status, "clCreateBuffer for dist_buffer")
-    cl_mem prev_buffer = clCreateBuffer(context, CL_MEM_READ_WRITE, vertices * sizeof(float), NULL, &cl_status);
-    CHECK_ERROR(cl_status, "clCreateBuffer for prev_buffer")
-    cl_mem edges_start_buffer = clCreateBuffer(context, CL_MEM_READ_ONLY, vertices * sizeof(int), NULL, &cl_status);
-    CHECK_ERROR(cl_status, "clCreateBuffer for edges_start_buffer")
-    cl_mem edge_destinations_buffer = clCreateBuffer(context, CL_MEM_READ_ONLY, edge_count * sizeof(int), NULL, &cl_status);
-    CHECK_ERROR(cl_status, "clCreateBuffer for edge_destinations_buffer")
-    cl_mem edge_weights_buffer = clCreateBuffer(context, CL_MEM_READ_ONLY, edge_count * sizeof(float), NULL, &cl_status);
-    CHECK_ERROR(cl_status, "clCreateBuffer for edge_weights_buffer")
-    cl_mem bucket_nodes_buffer = clCreateBuffer(context, CL_MEM_READ_ONLY, vertices * sizeof(int), NULL, &cl_status);
-    CHECK_ERROR(cl_status, "clCreateBuffer for bucket_nodes_buffer")
-    cl_mem nodes_2_bucket_buffer = clCreateBuffer(context, CL_MEM_READ_WRITE, vertices * sizeof(int), NULL, &cl_status);
-    CHECK_ERROR(cl_status, "clCreateBuffer for nodes_2_bucket_buffer")
-
-    // copy the data to the buffers
-    cl_status = clEnqueueWriteBuffer(queue, dist_buffer, CL_TRUE, 0, vertices * sizeof(float), dist, 0, NULL, NULL);
-    CHECK_ERROR(cl_status, "clEnqueueWriteBuffer for dist_buffer")
-    cl_status = clEnqueueWriteBuffer(queue, prev_buffer, CL_TRUE, 0, vertices * sizeof(float), prev, 0, NULL, NULL);
-    CHECK_ERROR(cl_status, "clEnqueueWriteBuffer for prev_buffer")
-    cl_status = clEnqueueWriteBuffer(queue, edges_start_buffer, CL_TRUE, 0, vertices * sizeof(int), edges_start, 0, NULL, NULL);
-    CHECK_ERROR(cl_status, "clEnqueueWriteBuffer for edges_start_buffer")
-    cl_status = clEnqueueWriteBuffer(queue, edge_destinations_buffer, CL_TRUE, 0, edge_count * sizeof(int), edge_destinations, 0, NULL, NULL);
-    CHECK_ERROR(cl_status, "clEnqueueWriteBuffer for edge_destinations_buffer")
-    cl_status = clEnqueueWriteBuffer(queue, edge_weights_buffer, CL_TRUE, 0, edge_count * sizeof(float), edge_weights, 0, NULL, NULL);
-    CHECK_ERROR(cl_status, "clEnqueueWriteBuffer for edge_weights_buffer")
-
-    // set the kernel arguments
-    cl_status = clSetKernelArg(kernel, 0, sizeof(cl_mem), &dist_buffer);
-    CHECK_ERROR(cl_status, "clSetKernelArg for dist_buffer")
-    cl_status = clSetKernelArg(kernel, 1, sizeof(cl_mem), &prev_buffer);
-    CHECK_ERROR(cl_status, "clSetKernelArg for prev_buffer")
-    cl_status = clSetKernelArg(kernel, 2, sizeof(cl_mem), &edges_start_buffer);
-    CHECK_ERROR(cl_status, "clSetKernelArg for edges_start_buffer")
-    cl_status = clSetKernelArg(kernel, 3, sizeof(cl_mem), &edge_destinations_buffer);
-    CHECK_ERROR(cl_status, "clSetKernelArg for edge_destinations_buffer")
-    cl_status = clSetKernelArg(kernel, 4, sizeof(cl_mem), &edge_weights_buffer);
-    CHECK_ERROR(cl_status, "clSetKernelArg for edge_weights_buffer")
-    cl_status = clSetKernelArg(kernel, 5, sizeof(cl_mem), &bucket_nodes_buffer);
-    CHECK_ERROR(cl_status, "clSetKernelArg for bucket_nodes_buffer")
-    cl_status = clSetKernelArg(kernel, 6, sizeof(cl_mem), &nodes_2_bucket_buffer);
-    CHECK_ERROR(cl_status, "clSetKernelArg for nodes_2_bucket_buffer")
-    const float delta = DELTA;
-    cl_status = clSetKernelArg(kernel, 7, sizeof(float), &delta);
-    CHECK_ERROR(cl_status, "clSetKernelArg for delta")
-    cl_status = clSetKernelArg(kernel, 8, sizeof(int), &vertices);
-    CHECK_ERROR(cl_status, "clSetKernelArg for vertices")
-    */
-
     // run a loop over every bucket
     int bucket_id = 0;
     while (bucket_id < bucketsArray.numBuckets) {
@@ -358,20 +202,6 @@ int deltaStepping(
 
         // check if there is stuff to do
         if (globalWorkSize[0] == 0) continue;
-
-        // set the new bucket_nodes and reset the nodes_2_bucket in OpenCL
-        // cl_status = clEnqueueWriteBuffer(queue, bucket_nodes_buffer, CL_TRUE, 0, bucketsArray.bucketSizes[bucket_id] * sizeof(int), bucketsArray.buckets[bucket_id], 0, NULL, NULL);
-        // CHECK_ERROR(cl_status, "clEnqueueWriteBuffer for bucket_nodes_buffer")
-        // cl_status = clEnqueueWriteBuffer(queue, nodes_2_bucket_buffer, CL_TRUE, 0, vertices * sizeof(int), nodes_2_buckets, 0, NULL, NULL);
-        // CHECK_ERROR(cl_status, "clEnqueueWriteBuffer for nodes_2_bucket_buffer")
-
-        // set the current_bucket argument
-        // cl_status = clSetKernelArg(kernel, 9, sizeof(int), &bucket_id);
-        // CHECK_ERROR(cl_status, "clSetKernelArg for current_bucket")
-
-        // execute kernels on the GPU
-        // cl_status = clEnqueueNDRangeKernel(queue, kernel, 1, NULL, globalWorkSize, NULL, 0, NULL, NULL);
-        // CHECK_ERROR(cl_status, "clEnqueueNDRangeKernel")
         for (int i = 0; i < bucketsArray.bucketSizes[bucket_id]; i++) {
             const int node = bucketsArray.buckets[bucket_id][i];
 
@@ -408,19 +238,9 @@ int deltaStepping(
             }
         }
 
-
-        // wait for the results
-        // cl_status = clFinish(queue);
-        // CHECK_ERROR(cl_status, "clFinish")
-
-        // get back the calculated nodes_2_buckets
-        // cl_status = clEnqueueReadBuffer(queue, nodes_2_bucket_buffer, CL_TRUE, 0, vertices * sizeof(float), nodes_2_buckets, 0, NULL, NULL);
-        // CHECK_ERROR(cl_status, "clEnqueueReadBuffer for nodes_2_buckets_buffer")
-
         // Add the nodes to their buckets
         for (int node_index = 0; node_index < vertices; node_index++) {
             if (nodes_2_bucket[node_index] != -1) {
-                //printf("%d\n", node_index);
                 addNodeToBucket(&bucketsArray, nodes_2_bucket[node_index], node_index);
                 nodes_2_bucket[node_index] = -1;  // Reset the value
             }
@@ -428,27 +248,8 @@ int deltaStepping(
         bucket_id++;
     }
 
-    /*// get the calculated distance and previous arrays
-    cl_status = clEnqueueReadBuffer(queue, dist_buffer, CL_TRUE, 0, vertices * sizeof(float), dist, 0, NULL, NULL);
-    CHECK_ERROR(cl_status, "clEnqueueReadBuffer for dist_buffer")
-    cl_status = clEnqueueReadBuffer(queue, prev_buffer, CL_TRUE, 0, vertices * sizeof(float), prev, 0, NULL, NULL);
-    CHECK_ERROR(cl_status, "clEnqueueReadBuffer for prev_buffer")
-
-    // release the OpenCL objects
-    clReleaseMemObject(dist_buffer);
-    clReleaseMemObject(prev_buffer);
-    clRetainMemObject(edges_start_buffer);
-    clReleaseMemObject(edge_destinations_buffer);
-    clReleaseMemObject(edge_weights_buffer);
-    clReleaseKernel(kernel);
-    clReleaseProgram(program);
-    clReleaseCommandQueue(queue);
-    clReleaseContext(context);*/
-
-
     // Free each bucket's allocated memory
     freeBuckets(&bucketsArray);
-
 
     // Free edge memory
     free(edge_destinations);
@@ -570,18 +371,10 @@ int main(const int argc, char *argv[]) {
 
     // Run Dijkstra's algorithm with the source and target IDs
     const clock_t routing_time_start = clock();  // Start the routing time
-    /*
-    if (dijkstra(nodeCount, nodes, start_index, dest_index) != 0) {
-        freeNodes(nodes, nodeCount);
-        return 1;
-    }
-    //*/
-    //*
     if (deltaStepping(nodeCount, nodes, start_index, dest_index) != 0) {
         freeNodes(nodes, nodeCount);
         return 1;
     }
-    //*/
 
     freeNodes(nodes, nodeCount);
 

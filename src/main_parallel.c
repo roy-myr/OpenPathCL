@@ -20,7 +20,7 @@
 #define INF FLT_MAX
 #define EARTH_RADIUS 6371000  // Earth's radius in meters
 
-#define DELTA 200.0 // The Delta value for bucket ranges, this can be tuned for optimal performance
+#define DELTA 40.0 // The Delta value for bucket ranges, this can be tuned for optimal performance
 
 #define CHECK_ERROR(err, msg) \
     if (err != CL_SUCCESS) { \
@@ -45,7 +45,7 @@ const char* kernel_source =
 "   __global int* nodes_2_bucket,                                                   \n"
 "   const float delta,                                                              \n"
 "   const int vertices,                                                             \n"
-"   const int edge_count,                                                            \n"
+"   const int edge_count,                                                           \n"
 "   const int current_bucket                                                        \n"
 ") {                                                                                \n"
 "   int node = bucket_nodes[get_global_id(0)];                                      \n"

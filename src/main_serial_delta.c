@@ -11,10 +11,7 @@
 #define INF FLT_MAX
 #define EARTH_RADIUS 6371000  // Earth's radius in meters
 
-#define DELTA 20.0 // The Delta value for bucket ranges, this can be tuned for optimal performance
-
-// Define an initial capacity for each bucket
-#define INITIAL_BUCKET_CAPACITY 10
+#define DELTA 40.0 // The Delta value for bucket ranges, this can be tuned for optimal performance
 
 // Function for calculating the distance between two coordinated on earth
 float haversine(float lat1, const float lon1, float lat2, const float lon2) {
