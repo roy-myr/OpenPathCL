@@ -12,7 +12,7 @@
 #define INF FLT_MAX
 #define EARTH_RADIUS 6371000  // Earth's radius in meters
 
-#define DELTA 40.0 // The Delta value for bucket ranges, this can be tuned for optimal performance
+#define DELTA 40.0 // The Delta value for bucket ranges
 
 // Function for calculating the distance between two coordinated on earth
 float haversine(float lat1, const float lon1, float lat2, const float lon2) {
@@ -154,7 +154,11 @@ void convert_to_device_arrays(
 
 int parallelizableDeltaStepping(
         const int vertices,
+        const int edge_count,
         Node nodes[],
+        const int* edges_start,
+        const int* edge_destinations,
+        const float* edge_weights,
         const int start_index,
         const int dest_index) {
 
@@ -185,15 +189,6 @@ int parallelizableDeltaStepping(
     // Add the start node to the first bucket
     addNodeToBucket(&bucketsArray, 0, start_index);
 
-    // Create Arrays for handling the data inside OpenCL
-    int edges_start[vertices];  // Array that holds the starting index inside the edges array for each node
-    int *edge_destinations = NULL; // Array to hold the destination of each edge
-    float *edge_weights = NULL;    // Array to hold the weight of each edge
-
-    // Convert nodes and edges to OpenCL-compatible flattened arrays
-    int edge_count = 0;
-    convert_to_device_arrays(nodes, vertices, edges_start, &edge_destinations, &edge_weights, &edge_count);
-
     // run a loop over every bucket
     int bucket_id = 0;
     while (bucket_id < bucketsArray.numBuckets) {
@@ -201,7 +196,11 @@ int parallelizableDeltaStepping(
         size_t globalWorkSize[1] = {bucketsArray.bucketSizes[bucket_id]};
 
         // check if there is stuff to do
-        if (globalWorkSize[0] == 0) continue;
+        if (globalWorkSize[0] == 0) {
+            bucket_id++;
+            continue;
+        }
+
         for (int i = 0; i < bucketsArray.bucketSizes[bucket_id]; i++) {
             const int node = bucketsArray.buckets[bucket_id][i];
 
@@ -250,10 +249,6 @@ int parallelizableDeltaStepping(
 
     // Free each bucket's allocated memory
     freeBuckets(&bucketsArray);
-
-    // Free edge memory
-    free(edge_destinations);
-    free(edge_weights);
 
     // After the loop, check if the target vertex has been reached
     if (dist[dest_index] != INF) {
@@ -359,10 +354,18 @@ int main(const int argc, char *argv[]) {
 
     // Fill the Graph using the Roads Data
     createGraph(nodes, nodeCount, roads, roadCount);
-    writeGraphToMermaidFile(nodes, nodeCount);
 
     // free the not needed data
     free(roads);
+
+    // Create Arrays for handling the data inside OpenCL
+    int edges_start[nodeCount];  // Array that holds the starting index inside the edges array for each node
+    int *edge_destinations = NULL; // Array to hold the destination of each edge
+    float *edge_weights = NULL;    // Array to hold the weight of each edge
+
+    // Convert nodes and edges to OpenCL-compatible flattened arrays
+    int edge_count = 0;
+    convert_to_device_arrays(nodes, nodeCount, edges_start, &edge_destinations, &edge_weights, &edge_count);
 
     // end the graph time and prints its result
     const clock_t graph_time_end = clock();
@@ -371,12 +374,22 @@ int main(const int argc, char *argv[]) {
 
     // Run Dijkstra's algorithm with the source and target IDs
     const clock_t routing_time_start = clock();  // Start the routing time
-    if (parallelizableDeltaStepping(nodeCount, nodes, start_index, dest_index) != 0) {
+    if (parallelizableDeltaStepping(
+        nodeCount,
+        edge_count,
+        nodes,
+        edges_start,
+        edge_destinations,
+        edge_weights,
+        start_index,
+        dest_index) != 0) {
         freeNodes(nodes, nodeCount);
         return 1;
     }
 
     freeNodes(nodes, nodeCount);
+    free(edge_destinations);
+    free(edge_weights);
 
     // end the routing time and print its result
     const clock_t routing_time_end = clock();

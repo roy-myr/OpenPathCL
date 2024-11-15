@@ -20,19 +20,13 @@
 #define INF FLT_MAX
 #define EARTH_RADIUS 6371000  // Earth's radius in meters
 
-#define DELTA 40.0 // The Delta value for bucket ranges, this can be tuned for optimal performance
+#define DELTA 40.0 // The Delta value for bucket ranges
 
 #define CHECK_ERROR(err, msg) \
     if (err != CL_SUCCESS) { \
     fprintf(stderr, "%s failed with error code %d\n", msg, err); \
     exit(EXIT_FAILURE); \
     }
-
-/*/ define a struct for handling the edges in OpenCL
-typedef struct {
-    int destination;
-    float weight;
-} __attribute__((packed, aligned(16))) DeviceEdge;*/
 
 const char* kernel_source =
 "__kernel void process_bucket_nodes(                                                \n"
@@ -223,10 +217,14 @@ void convert_to_device_arrays(
 }
 
 int parallelDeltaStepping(
-        const int vertices,
-        Node nodes[],
-        const int start_index,
-        const int dest_index) {
+    const int vertices,
+    const int edge_count,
+    Node nodes[],
+    const int* edges_start,
+    const int* edge_destinations,
+    const float* edge_weights,
+    const int start_index,
+    const int dest_index) {
 
     // define the distance array. dist[i] holds the shortest distance form src to i
     float dist[vertices];
@@ -254,15 +252,6 @@ int parallelDeltaStepping(
 
     // Add the start node to the first bucket
     addNodeToBucket(&bucketsArray, 0, start_index);
-
-    // Create Arrays for handling the data inside OpenCL
-    int edges_start[vertices];  // Array that holds the starting index inside the edges array for each node
-    int *edge_destinations = NULL; // Array to hold the destination of each edge
-    float *edge_weights = NULL;    // Array to hold the weight of each edge
-
-    // Convert nodes and edges to OpenCL-compatible flattened arrays
-    int edge_count = 0;
-    convert_to_device_arrays(nodes, vertices, edges_start, &edge_destinations, &edge_weights, &edge_count);
 
     // ---- Initialize OpenCL ----
     // Variable to check the output of the opencl API calls
@@ -378,7 +367,10 @@ int parallelDeltaStepping(
         size_t globalWorkSize[1] = {bucketsArray.bucketSizes[bucket_id]};
 
         // check if there is stuff to do
-        if (globalWorkSize[0] == 0) continue;
+        if (globalWorkSize[0] == 0) {
+            bucket_id++;
+            continue;
+        }
 
         // set the new bucket_nodes and reset the nodes_2_bucket in OpenCL
         cl_status = clEnqueueWriteBuffer(queue, bucket_nodes_buffer, CL_TRUE, 0, bucketsArray.bucketSizes[bucket_id] * sizeof(int), bucketsArray.buckets[bucket_id], 0, NULL, NULL);
@@ -405,7 +397,6 @@ int parallelDeltaStepping(
         // Add the nodes to their buckets
         for (int node_index = 0; node_index < vertices; node_index++) {
             if (nodes_2_buckets[node_index] != -1) {
-                //printf("%d\n", node_index);
                 addNodeToBucket(&bucketsArray, nodes_2_buckets[node_index], node_index);
                 nodes_2_buckets[node_index] = -1;  // Reset the value
             }
@@ -430,14 +421,8 @@ int parallelDeltaStepping(
     clReleaseCommandQueue(queue);
     clReleaseContext(context);
 
-
     // Free each bucket's allocated memory
     freeBuckets(&bucketsArray);
-
-
-    // Free edge memory
-    free(edge_destinations);
-    free(edge_weights);
 
     // After the loop, check if the target vertex has been reached
     if (dist[dest_index] != INF) {
@@ -547,6 +532,15 @@ int main(const int argc, char *argv[]) {
     // free the not needed data
     free(roads);
 
+    // Create Arrays for handling the data inside OpenCL
+    int edges_start[nodeCount];  // Array that holds the starting index inside the edges array for each node
+    int *edge_destinations = NULL; // Array to hold the destination of each edge
+    float *edge_weights = NULL;    // Array to hold the weight of each edge
+
+    // Convert nodes and edges to OpenCL-compatible flattened arrays
+    int edge_count = 0;
+    convert_to_device_arrays(nodes, nodeCount, edges_start, &edge_destinations, &edge_weights, &edge_count);
+
     // end the graph time and prints its result
     const clock_t graph_time_end = clock();
     const double graph_time  = ((double) (graph_time_end - graph_time_start)) * 1000 / CLOCKS_PER_SEC;
@@ -554,12 +548,22 @@ int main(const int argc, char *argv[]) {
 
     // Run Dijkstra's algorithm with the source and target IDs
     const clock_t routing_time_start = clock();  // Start the routing time
-    if (parallelDeltaStepping(nodeCount, nodes, start_index, dest_index) != 0) {
+    if (parallelDeltaStepping(
+        nodeCount,
+        edge_count,
+        nodes,
+        edges_start,
+        edge_destinations,
+        edge_weights,
+        start_index,
+        dest_index) != 0) {
         freeNodes(nodes, nodeCount);
         return 1;
     }
 
     freeNodes(nodes, nodeCount);
+    free(edge_destinations);
+    free(edge_weights);
 
     // end the routing time and print its result
     const clock_t routing_time_end = clock();
