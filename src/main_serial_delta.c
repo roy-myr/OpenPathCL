@@ -42,55 +42,29 @@ int deltaStepping(
     // go through each Bucket
     int bucket_id = 0;
     while (bucket_id < bucketsArray.numBuckets) {
-        // go through each node inside the bucket
+        // Go through each node inside the bucket
         for (int i = 0; i < bucketsArray.bucketSizes[bucket_id]; i++) {
             const int node = bucketsArray.buckets[bucket_id][i];
 
-            // get the edge of the node
+            // Get the edge of the node
             const Edge* edge = nodes[node].head;
 
-            // process light edges (weight <= DELTA)
+            // Process edges
             while (edge) {
-                if (edge->weight <= DELTA) {
-                    // calculate the new distance
-                    const float new_distance = dist[node] + edge->weight;
-                    // check if the distance is less than the current one
-                    if (new_distance < dist[edge->destination]) {
-                        // set the new distance for the next node
-                        dist[edge->destination] = new_distance;
-                        // set the previous of the next node
-                        prev[edge->destination] = node;
-                        // calculate the bucket where the next node belongs to
-                        const int new_bucket_index = (int) (new_distance / DELTA);
-                        // add the next node to the correct bucket
-                        addNodeToBucket(&bucketsArray, new_bucket_index, edge->destination);
-                    }
-                }
-                // go to next edge
-                edge = edge->next;
-            }
+                const float new_distance = dist[node] + edge->weight;
+                // Check if the new distance is shorter
+                if (new_distance < dist[edge->destination]) {
+                    // Update distance and previous node
+                    dist[edge->destination] = new_distance;
+                    prev[edge->destination] = node;
 
-            // reset the edges
-            edge = nodes[node].head;
+                    // Determine the bucket for the destination node
+                    const int new_bucket_index = (int)(new_distance / DELTA);
 
-            // process heavy edges (weight > DELTA)
-            while (edge) {
-                if (edge->weight > DELTA) {
-                    // calculate the new distance
-                    const float new_distance = dist[node] + edge->weight;
-                    // check if the distance is less than the current one
-                    if (new_distance < dist[edge->destination]) {
-                        // set the new distance for the next node
-                        dist[edge->destination] = new_distance;
-                        //set the previous of the next node
-                        prev[edge->destination] = node;
-                        // calculate the bucket where the next node belongs to
-                        const int new_bucket_index = (int) (new_distance / DELTA);
-                        // add the next node to the correct bucket
-                        addNodeToBucket(&bucketsArray, new_bucket_index, edge->destination);
-                    }
+                    // Add the destination node to the correct bucket
+                    addNodeToBucket(&bucketsArray, new_bucket_index, edge->destination);
                 }
-                // go to next edge
+                // Move to the next edge
                 edge = edge->next;
             }
         }
