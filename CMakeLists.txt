@@ -29,14 +29,14 @@ target_link_libraries(OpenCL_check ${OpenCL_LIBRARIES})
 # Add the serial Dijkstra version executable
 add_executable(OpenPathCL_serial_dijkstra
         src/main_serial_dijkstra.c
-        src/haversine.h
-        src/haversine.c
-        src/cli_utils.c
         src/cli_utils.h
+        src/cli_utils.c
         src/graph_utils.h
         src/graph_utils.c
         src/data_loader.h
         src/data_loader.c
+        src/haversine.h
+        src/haversine.c
         src/bucket_utils.h
         src/bucket_utils.c)
 
@@ -51,14 +51,14 @@ target_link_libraries(OpenPathCL_serial_dijkstra cjson)
 # Add the serial delta stepping version executable
 add_executable(OpenPathCL_serial_delta
         src/main_serial_delta.c
-        src/haversine.h
-        src/haversine.c
-        src/cli_utils.c
         src/cli_utils.h
+        src/cli_utils.c
         src/graph_utils.h
         src/graph_utils.c
         src/data_loader.h
         src/data_loader.c
+        src/haversine.h
+        src/haversine.c
         src/bucket_utils.h
         src/bucket_utils.c)
 
@@ -73,14 +73,14 @@ target_link_libraries(OpenPathCL_serial_delta cjson)
 # Add the parallelizable version executable
 add_executable(OpenPathCL_parallelizable
         src/main_parallelizable.c
-        src/haversine.h
-        src/haversine.c
-        src/cli_utils.c
         src/cli_utils.h
+        src/cli_utils.c
         src/graph_utils.h
         src/graph_utils.c
         src/data_loader.h
         src/data_loader.c
+        src/haversine.h
+        src/haversine.c
         src/bucket_utils.h
         src/bucket_utils.c
         src/parallel_utils.h
@@ -100,14 +100,14 @@ target_link_libraries(OpenPathCL_parallelizable ${OpenCL_LIBRARIES})
 # Add the parallel version executable
 add_executable(OpenPathCL_parallel
         src/main_parallel.c
-        src/haversine.h
-        src/haversine.c
-        src/cli_utils.c
         src/cli_utils.h
+        src/cli_utils.c
         src/graph_utils.h
         src/graph_utils.c
         src/data_loader.h
         src/data_loader.c
+        src/haversine.h
+        src/haversine.c
         src/bucket_utils.h
         src/bucket_utils.c
         src/parallel_utils.h
