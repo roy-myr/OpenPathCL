@@ -2,96 +2,14 @@
 #include <stdlib.h>
 #include <stdbool.h> // For boolean data types
 #include <float.h>  // For FLT_MAX
-#include <math.h>  // for Pi, sin, cos, atan and sqrt
 #include <curl/curl.h>
 #include <time.h>
 
-#include "common.h"  // Include the common header
+#include "cli_utils.h" // Include parseArguments function
+#include "data_loader.h"  // Include OverpassAPI functions
+#include "graph_utils.h"  // Include Graph functions
 
 #define INF FLT_MAX
-#define EARTH_RADIUS 6371000  // Earth's radius in meters
-
-// Function for calculating the distance between two coordinated on earth
-float haversine(float lat1, const float lon1, float lat2, const float lon2) {
-    const float lat_distance = (float) ((lat2 - lat1) * (M_PI / 180.0));
-    const float lon_distance = (float) ((lon2 - lon1) * (M_PI / 180.0));
-
-    lat1 = (float) (lat1 * (M_PI / 180.0));
-    lat2 = (float) (lat2 * (M_PI / 180.0));
-
-    const float a = (float) (sin(lat_distance / 2) * sin(lat_distance / 2) +
-                    sin(lon_distance / 2) * sin(lon_distance / 2) * cos(lat1) * cos(lat2));
-
-    const float c = (float) (2 * atan2(sqrt(a), sqrt(1 - a)));
-
-    return EARTH_RADIUS * c;
-}
-
-// Function to fill the graph with the data from the roads
-void createGraph(Node* nodes, const int nodeCount, const Road* roads, const int roadCount) {
-    // Iterate through each road
-    for (int i = 0; i < roadCount; i++) {
-
-        // Go through each pair of consecutive nodes in the road
-        for (int j = 0; j < roads[i].nodeCount - 1; j++) {
-            const int64_t nodeId1 = roads[i].nodes[j];
-            const int64_t nodeId2 = roads[i].nodes[j + 1];
-
-            // Find the indexes of nodeId1 and nodeId2 in the nodes array
-            int index1 = -1, index2 = -1;
-            for (int k = 0; k < nodeCount; k++) {
-                if (nodes[k].id == nodeId1) index1 = k;
-                if (nodes[k].id == nodeId2) index2 = k;
-                if (index1 != -1 && index2 != -1) break;
-            }
-
-            // If both nodes are found, calculate the distance between them
-            if (index1 != -1 && index2 != -1) {
-                const float distance = haversine(nodes[index1].lat, nodes[index1].lon,
-                                                  nodes[index2].lat, nodes[index2].lon);
-
-                // Add edge from index1 to index2
-                Edge* newEdge1 = malloc(sizeof(Edge));
-                if (newEdge1 != NULL) {
-                    newEdge1->destination = index2;
-                    newEdge1->weight = distance;
-                    newEdge1->next = nodes[index1].head;
-                    nodes[index1].head = newEdge1;
-                } else {
-                    fprintf(stderr, "Failed to allocate memory for edge from %ld to %ld\n", nodeId1, nodeId2);
-                }
-
-                // Add edge from index2 to index1 (for undirected graph)
-                Edge* newEdge2 = malloc(sizeof(Edge));
-                if (newEdge2 != NULL) {
-                    newEdge2->destination = index1;
-                    newEdge2->weight = distance;
-                    newEdge2->next = nodes[index2].head;
-                    nodes[index2].head = newEdge2;
-                } else {
-                    fprintf(stderr, "Failed to allocate memory for edge from %ld to %ld\n", nodeId2, nodeId1);
-                }
-            } else {
-                fprintf(stderr, "Failed to find nodes with IDs %ld and/or %ld in nodes array\n", nodeId1, nodeId2);
-            }
-        }
-    }
-}
-
-
-// Function to free the nodes memory
-void freeNodes(Node* nodes, const int nodeCount) {
-    for (int i = 0; i < nodeCount; i++) {
-        Edge* current = nodes[i].head;
-        while (current != NULL) {
-            Edge* temp = current;
-            current = current->next;
-            free(temp); // Free each edge in the linked list
-        }
-        nodes[i].head = NULL; // Set head to NULL after freeing
-    }
-    free(nodes); // Finally, free the array of nodes itself
-}
 
 // Function to find the vertex with the minimum distance value
 int minDistance(const int vertices, const float dist[], const bool visited_map[]) {

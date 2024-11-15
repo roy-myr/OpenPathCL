@@ -1,156 +1,19 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <float.h>  // For FLT_MAX
-#include <math.h>  // for Pi, sin, cos, atan and sqrt
-#include <string.h>
 #include <curl/curl.h>
 #include <time.h>
 #include <CL/cl.h>
 
-#include "common.h"  // Include the common header
+#include "cli_utils.h" // Include parseArguments function
+#include "data_loader.h"  // Include OverpassAPI functions
+#include "graph_utils.h"  // Include Graph functions
+#include "bucket_utils.h"  // Include Bucket functions
+#include "parallel_utils.h"  // Include convert_to_device_arrays function
 
 #define INF FLT_MAX
-#define EARTH_RADIUS 6371000  // Earth's radius in meters
 
 #define DELTA 40.0 // The Delta value for bucket ranges
-
-// Function for calculating the distance between two coordinated on earth
-float haversine(float lat1, const float lon1, float lat2, const float lon2) {
-    const float lat_distance = (float) ((lat2 - lat1) * (M_PI / 180.0));
-    const float lon_distance = (float) ((lon2 - lon1) * (M_PI / 180.0));
-
-    lat1 = (float) (lat1 * (M_PI / 180.0));
-    lat2 = (float) (lat2 * (M_PI / 180.0));
-
-    const float a = (float) (sin(lat_distance / 2) * sin(lat_distance / 2) +
-                    sin(lon_distance / 2) * sin(lon_distance / 2) * cos(lat1) * cos(lat2));
-
-    const float c = (float) (2 * atan2(sqrt(a), sqrt(1 - a)));
-
-    return EARTH_RADIUS * c;
-}
-
-// Function to fill the graph with the data from the roads
-void createGraph(Node* nodes, const int nodeCount, const Road* roads, const int roadCount) {
-    // Iterate through each road
-    for (int i = 0; i < roadCount; i++) {
-
-        // Go through each pair of consecutive nodes in the road
-        for (int j = 0; j < roads[i].nodeCount - 1; j++) {
-            const int64_t nodeId1 = roads[i].nodes[j];
-            const int64_t nodeId2 = roads[i].nodes[j + 1];
-
-            // Find the indexes of nodeId1 and nodeId2 in the nodes array
-            int index1 = -1, index2 = -1;
-            for (int k = 0; k < nodeCount; k++) {
-                if (nodes[k].id == nodeId1) index1 = k;
-                if (nodes[k].id == nodeId2) index2 = k;
-                if (index1 != -1 && index2 != -1) break;
-            }
-
-            // If both nodes are found, calculate the distance between them
-            if (index1 != -1 && index2 != -1) {
-                const float distance = haversine(nodes[index1].lat, nodes[index1].lon,
-                                                  nodes[index2].lat, nodes[index2].lon);
-
-                // Add edge from index1 to index2
-                Edge* newEdge1 = malloc(sizeof(Edge));
-                if (newEdge1 != NULL) {
-                    newEdge1->destination = index2;
-                    newEdge1->weight = distance;
-                    newEdge1->next = nodes[index1].head;
-                    nodes[index1].head = newEdge1;
-                } else {
-                    fprintf(stderr, "Failed to allocate memory for edge from %ld to %ld\n", nodeId1, nodeId2);
-                }
-
-                // Add edge from index2 to index1 (for undirected graph)
-                Edge* newEdge2 = malloc(sizeof(Edge));
-                if (newEdge2 != NULL) {
-                    newEdge2->destination = index1;
-                    newEdge2->weight = distance;
-                    newEdge2->next = nodes[index2].head;
-                    nodes[index2].head = newEdge2;
-                } else {
-                    fprintf(stderr, "Failed to allocate memory for edge from %ld to %ld\n", nodeId2, nodeId1);
-                }
-            } else {
-                fprintf(stderr, "Failed to find nodes with IDs %ld and/or %ld in nodes array\n", nodeId1, nodeId2);
-            }
-        }
-    }
-}
-
-// Function to free the nodes memory
-void freeNodes(Node* nodes, const int nodeCount) {
-    for (int i = 0; i < nodeCount; i++) {
-        Edge* current = nodes[i].head;
-        while (current != NULL) {
-            Edge* temp = current;
-            current = current->next;
-            free(temp); // Free each edge in the linked list
-        }
-        nodes[i].head = NULL; // Set head to NULL after freeing
-    }
-    free(nodes); // Finally, free the array of nodes itself
-}
-
-void convert_to_device_arrays(
-    const Node* nodes,
-    const int nodeCount,
-    int* edges_start,
-    int** edge_destinations,
-    float** edge_weights,
-    int* edge_count) {
-
-    *edge_count = 0; // Start with zero edges
-
-    // Initial allocation for edges_destination and edges_weight
-    int edge_capacity = nodeCount * 2; // Initial estimated capacity, adjust as needed
-    *edge_destinations = malloc(edge_capacity * sizeof(int));
-    *edge_weights = malloc(edge_capacity * sizeof(float));
-
-    if (*edge_destinations == NULL || *edge_weights == NULL) {
-        fprintf(stderr, "Error: Unable to allocate memory for edges.\n");
-        exit(EXIT_FAILURE);
-    }
-
-    // Populate edges and update edge count
-    for (int i = 0; i < nodeCount; i++) {
-        edges_start[i] = *edge_count; // Starting index for edges of node `i`
-
-        const Edge* edge = nodes[i].head; // Access the linked list of edges for this node
-        while (edge) {
-            // Expand capacity if necessary
-            if (*edge_count >= edge_capacity) {
-                edge_capacity *= 2;
-                *edge_destinations = realloc(*edge_destinations, edge_capacity * sizeof(int));
-                *edge_weights = realloc(*edge_weights, edge_capacity * sizeof(float));
-
-                if (*edge_destinations == NULL || *edge_weights == NULL) {
-                    fprintf(stderr, "Error: Unable to reallocate memory for edges.\n");
-                    exit(EXIT_FAILURE);
-                }
-            }
-
-            // Add destination and weight to separate arrays
-            (*edge_destinations)[*edge_count] = edge->destination;
-            (*edge_weights)[*edge_count] = edge->weight;
-            (*edge_count)++;
-
-            edge = edge->next; // Move to the next edge in the linked list
-        }
-    }
-
-    // Shrink arrays to fit exact edge count
-    *edge_destinations = realloc(*edge_destinations, *edge_count * sizeof(int));
-    *edge_weights = realloc(*edge_weights, *edge_count * sizeof(float));
-
-    if ((*edge_destinations == NULL || *edge_weights == NULL) && *edge_count > 0) {
-        fprintf(stderr, "Error: Unable to reallocate memory to fit exact edge count.\n");
-        exit(EXIT_FAILURE);
-    }
-}
 
 int parallelizableDeltaStepping(
         const int vertices,

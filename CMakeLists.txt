@@ -29,8 +29,16 @@ target_link_libraries(OpenCL_check ${OpenCL_LIBRARIES})
 # Add the serial Dijkstra version executable
 add_executable(OpenPathCL_serial_dijkstra
         src/main_serial_dijkstra.c
-        src/common.c
-        src/common.h)
+        src/haversine.h
+        src/haversine.c
+        src/cli_utils.c
+        src/cli_utils.h
+        src/graph_utils.h
+        src/graph_utils.c
+        src/data_loader.h
+        src/data_loader.c
+        src/bucket_utils.h
+        src/bucket_utils.c)
 
 # Link CURL to the serial Dijkstra version
 target_link_libraries(OpenPathCL_serial_dijkstra ${CURL_LIBRARIES})
@@ -43,8 +51,16 @@ target_link_libraries(OpenPathCL_serial_dijkstra cjson)
 # Add the serial delta stepping version executable
 add_executable(OpenPathCL_serial_delta
         src/main_serial_delta.c
-        src/common.c
-        src/common.h)
+        src/haversine.h
+        src/haversine.c
+        src/cli_utils.c
+        src/cli_utils.h
+        src/graph_utils.h
+        src/graph_utils.c
+        src/data_loader.h
+        src/data_loader.c
+        src/bucket_utils.h
+        src/bucket_utils.c)
 
 # Link CURL to the serial delta stepping version
 target_link_libraries(OpenPathCL_serial_delta ${CURL_LIBRARIES})
@@ -57,8 +73,18 @@ target_link_libraries(OpenPathCL_serial_delta cjson)
 # Add the parallelizable version executable
 add_executable(OpenPathCL_parallelizable
         src/main_parallelizable.c
-        src/common.c
-        src/common.h)
+        src/haversine.h
+        src/haversine.c
+        src/cli_utils.c
+        src/cli_utils.h
+        src/graph_utils.h
+        src/graph_utils.c
+        src/data_loader.h
+        src/data_loader.c
+        src/bucket_utils.h
+        src/bucket_utils.c
+        src/parallel_utils.h
+        src/parallel_utils.c)
 
 # Link CURL to the parallelizable version
 target_link_libraries(OpenPathCL_parallelizable ${CURL_LIBRARIES})
@@ -74,8 +100,18 @@ target_link_libraries(OpenPathCL_parallelizable ${OpenCL_LIBRARIES})
 # Add the parallel version executable
 add_executable(OpenPathCL_parallel
         src/main_parallel.c
-        src/common.c
-        src/common.h)
+        src/haversine.h
+        src/haversine.c
+        src/cli_utils.c
+        src/cli_utils.h
+        src/graph_utils.h
+        src/graph_utils.c
+        src/data_loader.h
+        src/data_loader.c
+        src/bucket_utils.h
+        src/bucket_utils.c
+        src/parallel_utils.h
+        src/parallel_utils.c)
 
 # Link CURL to the parallel version
 target_link_libraries(OpenPathCL_parallel ${CURL_LIBRARIES})

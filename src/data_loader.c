@@ -1,10 +1,16 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include "common.h"
-
 #include <string.h>
 #include <curl/curl.h>
 #include <cjson/cJSON.h>
+
+#include "graph_utils.h"  // for Node and Road Struct
+
+// Define a struct to hold the response data
+struct MemoryStruct {
+    char* memory;
+    size_t size;
+};
 
 // Function to extract the Nodes from the JSON Response
 void parseAndStoreJSON(const char* jsonResponse, Node** nodes, int* nodeCount, Road** roads, int* roadCount) {
@@ -132,85 +138,6 @@ void parseAndStoreJSON(const char* jsonResponse, Node** nodes, int* nodeCount, R
     printf("\t\"roadsInBoundingBox\": %d,\n", *roadCount);
 }
 
-// Debug Print to retrieve Nodes
-void printNodes(const Node* nodes, const int nodeCount) {
-    printf("Nodes:\n");
-    for (int i = 0; i < nodeCount; i++) {
-        printf("Node %d:\n", i + 1);
-        printf("  ID: %ld\n", nodes[i].id);
-        printf("  Latitude: %f\n", nodes[i].lat);
-        printf("  Longitude: %f\n", nodes[i].lon);
-        // Print more details if needed, such as `head` if it’s used
-    }
-    printf("Total Nodes: %d\n\n", nodeCount);
-}
-
-// Debug Print to retrieve Roads
-void printRoads(const Road* roads, const int roadCount) {
-    printf("Roads:\n");
-    for (int i = 0; i < roadCount; i++) {
-        printf("Road %d:\n", i + 1);
-        printf("  ID: %ld\n", roads[i].id);
-        printf("  Node Count: %d\n", roads[i].nodeCount);
-        printf("  Node IDs: ");
-        for (int j = 0; j < roads[i].nodeCount; j++) {
-            printf("%ld ", roads[i].nodes[j]);
-        }
-        printf("\n");
-    }
-    printf("Total Roads: %d\n\n", roadCount);
-}
-
-void printGraph(const Node* nodes, const int nodeCount) {
-    printf("Graph:\n");
-    for (int i = 0; i < nodeCount; i++) {
-        printf("Node ID: %ld (Index: %d)\n", nodes[i].id, i);
-        printf("  Location: (Lat: %f, Lon: %f)\n", nodes[i].lat, nodes[i].lon);
-
-        // Print all edges connected to this node
-        Edge* edge = nodes[i].head;
-        if (edge == NULL) {
-            printf("  No edges connected to this node.\n");
-        } else {
-            printf("  Edges:\n");
-            while (edge != NULL) {
-                printf("    -> Destination Node Index: %d, Weight: %.2f\n", edge->destination, edge->weight);
-                edge = edge->next;
-            }
-        }
-        printf("\n");
-    }
-}
-
-void writeGraphToMermaidFile(const Node* nodes, const int nodeCount) {
-    FILE* file = fopen("graph.md", "w");
-    if (file == NULL) {
-        fprintf(stderr, "Error: Could not open graph.md for writing.\n");
-        return;
-    }
-
-    // Write the Mermaid header for a graph
-    fprintf(file, "```mermaid\ngraph TD\n");
-
-    // Write each node and its edges
-    for (int i = 0; i < nodeCount; i++) {
-        fprintf(file, "    %ld[\"Node %ld (%d)<br/>(%.6f, %.6f)\"]\n",
-                nodes[i].id, nodes[i].id, i, nodes[i].lat, nodes[i].lon);
-
-        // Process each edge connected to the node
-        Edge* edge = nodes[i].head;
-        while (edge != NULL) {
-            // Write the edge with weight as a label
-            fprintf(file, "    %ld -->|%.2fm| %ld\n", nodes[i].id, edge->weight, nodes[edge->destination].id);
-            edge = edge->next;
-        }
-    }
-
-    // Close the Mermaid code block
-    fprintf(file, "```\n");
-    fclose(file);
-}
-
 
 static size_t WriteMemoryCallback(const void* contents, const size_t size, size_t nmemb, void* userp) {
     size_t realSize = size * nmemb;
@@ -229,41 +156,6 @@ static size_t WriteMemoryCallback(const void* contents, const size_t size, size_
     mem->memory[mem->size] = 0;
 
     return realSize;
-}
-
-// Function to parse command-line arguments
-int parseArguments(const int argc, char* argv[], float start[2], float dest[2], float** bbox, int* bbox_size) {
-    // Check for the required number of arguments
-    if (argc < 10 || (argc - 6) % 2 != 1) {
-        fprintf(stderr, "Invalid Arguments\n "
-                        "Usage: start_lat start_lon dest_lat dest_lon bbox_lat1 bbox_lon1 bbox_lat2 bbox_lon2 ...\n");
-        return -1; // Indicate an error
-    }
-
-    // Parse start point
-    start[0] = strtof(argv[1], NULL);  // start latitude
-    start[1] = strtof(argv[2], NULL);  // start longitude
-
-    // Parse destination point
-    dest[0] = strtof(argv[3], NULL);   // destination latitude
-    dest[1] = strtof(argv[4], NULL);   // destination longitude
-
-    // Calculate number of bounding box coordinates
-    *bbox_size = argc - 6;  // Remaining arguments are bbox points
-    *bbox = (float*)malloc(*bbox_size * sizeof(float)); // Dynamically allocate memory for bbox
-
-    // Check for successful memory allocation
-    if (*bbox == NULL) {
-        fprintf(stderr, "Memory allocation failed for bounding box.\n");
-        return -1; // Indicate an error
-    }
-
-    // Parse bounding box coordinates
-    for (int i = 0; i < *bbox_size + 1; ++i) {
-        (*bbox)[i] = strtof(argv[5 + i], NULL);
-    }
-
-    return 0; // Successful parsing
 }
 
 // Function to get the closest node to given coordinates
@@ -408,67 +300,4 @@ void getRoadNodes(
         curl_easy_cleanup(curl);
         free(response.memory);
     }
-}
-
-// Function to initialize the BucketsArray
-void initializeBuckets(BucketsArray *bucketsArray) {
-    bucketsArray->buckets = NULL;
-    bucketsArray->bucketSizes = NULL;
-    bucketsArray->numBuckets = 0;
-}
-
-// Function to resize the outer buckets array
-void resizeBuckets(BucketsArray *bucketsArray, const int newSize) {
-    bucketsArray->buckets = (int **)realloc(bucketsArray->buckets, newSize * sizeof(int *));
-    bucketsArray->bucketSizes = (int *)realloc(bucketsArray->bucketSizes, newSize * sizeof(int));
-    for (int i = bucketsArray->numBuckets; i < newSize; i++) {
-        bucketsArray->buckets[i] = NULL;    // Initialize new buckets to NULL
-        bucketsArray->bucketSizes[i] = 0;   // Initialize sizes to 0
-    }
-    bucketsArray->numBuckets = newSize;
-}
-
-// Function to add a node to a specific bucket, resizing if necessary
-void addNodeToBucket(BucketsArray *bucketsArray, const int bucketIndex, const int node_id) {
-    // Resize buckets array if needed
-    if (bucketIndex >= bucketsArray->numBuckets) {
-        resizeBuckets(bucketsArray, bucketIndex + 1);
-    }
-
-    // Get the current size of the bucket
-    int currentSize = bucketsArray->bucketSizes[bucketIndex];
-
-    // Resize the specific bucket to add another node
-    bucketsArray->buckets[bucketIndex] = (int *)realloc(bucketsArray->buckets[bucketIndex], (currentSize + 1) * sizeof(int));
-    bucketsArray->buckets[bucketIndex][currentSize] = node_id; // Add the new node
-    bucketsArray->bucketSizes[bucketIndex]++;  // Update the size
-}
-
-// Function to free the bucket memory
-void freeBuckets(BucketsArray *bucketsArray) {
-    if (bucketsArray == NULL || bucketsArray->buckets == NULL) {
-        return; // Nothing to free if the pointer is NULL
-    }
-
-    // Free each bucket's allocated memory
-    for (int i = 0; i < bucketsArray->numBuckets; i++) {
-        free(bucketsArray->buckets[i]);
-    }
-
-    // Free the array of buckets
-    free(bucketsArray->buckets);
-    bucketsArray->buckets = NULL; // Set to NULL to avoid dangling pointers
-}
-
-// Function to print a bucket's content
-void printBucket(const int *bucket, const int size) {
-    if (bucket == NULL || size == 0) {
-        printf("Bucket is empty.\n");
-        return;
-    }
-    printf("Bucket contents: [");
-    for (int i = 0; i < size; i++) {
-        printf("%d ", bucket[i]);
-    }
-    printf("]\n");
 }
