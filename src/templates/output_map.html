@@ -22,7 +22,7 @@
         }
         #sidebar {
             flex: 0 0 auto; /* 25% of the width */
-            min-width: 450px;
+            width: 450px;
             display: flex;
             flex-direction: column;
             justify-content: flex-start; /* Align content to the top */
@@ -30,9 +30,17 @@
             background-color: #3c3c3c; /* Darker background for sidebar */
         }
         #content {
-            margin: 20px;
+            margin: 10px 20px 5px 20px;
             width: 85%;
             display: none; /* Hide content by default */
+        }
+        #rerun {
+            margin: 10px 20px 20px 20px;
+            width: 85%;
+        }
+        .button-container {
+            margin: 0 20px 10px 20px;
+            width: 85%;
         }
         h1 {
             text-align: center;
@@ -74,6 +82,31 @@
             color: #fff; /* Keep text white for contrast */
             cursor: not-allowed; /* Change cursor to indicate it's not clickable */
             opacity: 0.7; /* Optional: reduce opacity for a softer look */
+        }
+        .toggle-button {
+            width: 140px;
+            margin: 2px; /* Match spacing */
+            padding: 10px 15px;
+            border: none;
+            border-radius: 5px;
+            background-color: #4caf50; /* Green for enabled buttons */
+            color: white;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+
+        /* Hover effect for enabled buttons */
+        .toggle-button:hover {
+            background-color: #45a049; /* Darker green on hover */
+        }
+
+        /* Style for the selected (disabled) button */
+        .toggle-button.selected {
+            background-color: #888; /* Gray color for disabled button */
+            color: white;
+            cursor: not-allowed; /* Show it's not clickable */
+            opacity: 0.7; /* Slightly lighter for visual differentiation */
         }
         /* Position the GitHub icon */
         .github-icon {
@@ -150,7 +183,7 @@
                 Roads in Bounding Box: <span id="roadsInBoundingBox"></span>
             </li>
         </ul>
-        <button id="overpassLink" onclick="location.href='overpassLink'">See Nodes</button>
+        <button id="overpassLink">See Nodes</button>
 
         <h2>Results</h2>
         <ul id="results">
@@ -173,7 +206,19 @@
                 Length of your Route: <span id="routeLength"></span>
             </li>
         </ul>
-        <br>
+    </div>
+
+    <div class="button-container">
+        <button class="submit" onclick="exportResults()">Save Results</button>
+    </div>
+
+    <hr>
+
+    <div id="rerun">
+        <h2>Rerun in:</h2>
+        <div id="rerunButtons">
+            <!-- Rerun buttons will be generated dynamically -->
+        </div>
     </div>
 
     <hr>
@@ -193,7 +238,7 @@
 
 <script>
     // Initialize the map
-    var map = L.map('map').setView([53.746056, 9.678164], 13); // Adjust initial view to center between start and destination
+    var map = L.map('map').setView([53.746056, 9.678164], 13);
 
     // Add a tile layer
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -205,7 +250,7 @@
 
     // get the input data from the local storage
     var storageData = localStorage.getItem('inputData');
-    var inputData = storageData ? JSON.parse(storageData): null
+    var inputData = storageData ? JSON.parse(storageData) : null;
 
     if (!inputData) {
         alert("No Input was found in local Storage!");
@@ -214,16 +259,20 @@
 
     console.log(inputData)
 
+    // global variables
+    let overpassLink
+    let route
+
     // Get the received data (replace with your method of getting the data)
     // Function to send a POST request to the /run endpoint and handle the response
-    async function receiveData() {
+    async function receiveData(algorithm = inputData.algorithm) {
         // Show the loading screen while the request is being processed
         showLoading();
 
         try {
             // Prepare the data to be sent in the request
             const requestData = {
-                algorithm: inputData.algorithm,
+                algorithm: algorithm,
                 bbox: inputData.bbox,
                 start: inputData.start,
                 dest: inputData.dest
@@ -247,8 +296,7 @@
             console.log(response)
             // Parse the JSON response from the server
             const responseData = await response.json();
-
-            // Show the results using the received data
+            inputData.algorithm = algorithm;  // Update the algorithm in inputData
             showResults(responseData);
 
         } catch (error) {
@@ -258,7 +306,6 @@
             document.getElementById('loading').innerText = error.message;
         }
     }
-
 
     // Function to display loading screen
     function showLoading() {
@@ -270,17 +317,25 @@
     function formatTime(ms) {
         const seconds = Math.floor(ms / 1000);
         const milliseconds = ms % 1000;
-
         return `${seconds}s${milliseconds}ms`;
     }
 
     // Function to display results
     function showResults(data) {
-        console.log("Data:", data)
+        console.log("Data:", data);
+
+        // Map the algorithm identifier to a more descriptive name
+        const algorithmNames = {
+            'serial_dijkstra': 'Dijkstra',
+            'serial_delta': '&Delta;-Stepping',
+            'parallelizable': 'Parallelizable',
+            'parallel': 'Parallel'
+        };
+        const algorithmDisplayName = algorithmNames[inputData.algorithm] || inputData.algorithm;
 
         document.getElementById('startNode').innerText = data.startNode;
         document.getElementById('startCoords').innerText = inputData.start[0] + ", " + inputData.start[1]
-        document.getElementById('algorithm').innerText = inputData.algorithm.charAt(0).toUpperCase() + inputData.algorithm.slice(1);
+        document.getElementById('algorithm').innerHTML = algorithmDisplayName;
         document.getElementById('destNode').innerText = data.destNode;
         document.getElementById('destCoords').innerText = inputData.dest[0] + ", " + inputData.dest[1];
         document.getElementById('nodesInBoundingBox').innerText = data.nodesInBoundingBox;
@@ -291,30 +346,155 @@
         document.getElementById('routeLength').innerText = data.routeLength;
 
         // Update the overpass link button
+        overpassLink = data.nodesRequest;
         document.getElementById('overpassLink').onclick = function() {
-            window.open(data.nodesRequest, '_blank'); // Set the link dynamically
+            window.open(overpassLink, "_blank"); // Set the link dynamically
         };
 
         // Add start and end point markers
         startPointMarker = L.marker(inputData.start).addTo(map);
         endPointMarker = L.marker(inputData.dest).addTo(map);
 
-        // Draw route line
-        var routeLine = L.polyline(data.route, {color: 'red'}).addTo(map);
+        // Draw the routing Line
+        route = data.route
+        if (window.routeLine) map.removeLayer(routeLine);
+        routeLine = L.polyline(route, { color: 'red' }).addTo(map);
 
-        // Add a bounding box (polygon) to the map
-        var polygonPoints = inputData.bbox; // Assuming bbox is an array of [lat, lng] pairs
-        boundingBox = L.polygon(polygonPoints, {color: '#3388ff', weight: 1}).addTo(map); // Use L.polygon instead of L.pol
-        map.fitBounds(inputData.bbox)
+        if (window.boundingBox) map.removeLayer(boundingBox);
+        boundingBox = L.polygon(inputData.bbox, { color: '#3388ff', weight: 1 }).addTo(map);
+        map.fitBounds(inputData.bbox);
 
-        // Show results content
-        document.getElementById('content').style.display = 'block'; // Show content
-        document.getElementById('loading').style.display = 'none'; // Hide loading screen
+        document.getElementById('content').style.display = 'block';
+        document.getElementById('loading').style.display = 'none';
+
+        createRerunButtons();
     }
 
-    // Simulate a loading delay
+    function createRerunButtons() {
+        const rerunButtonsContainer = document.getElementById('rerunButtons');
+        rerunButtonsContainer.innerHTML = ''; // Clear existing buttons
+
+        const algorithms = [
+            { id: 'serial_dijkstra', name: 'Dijkstra' },
+            { id: 'serial_delta', name: '&Delta;-Stepping' },
+            { id: 'parallelizable', name: 'Parallelizable' },
+            { id: 'parallel', name: 'Parallel' }
+        ];
+
+        algorithms.forEach(algorithm => {
+            const button = document.createElement('button');
+            button.innerHTML = algorithm.name;
+            button.className = 'toggle-button';
+
+            // If the button represents the selected algorithm, disable it and apply selected style
+            if (algorithm.id === inputData.algorithm) {
+                button.disabled = true;
+                button.classList.add('selected');
+            } else {
+                button.onclick = () => receiveData(algorithm.id); // Run the selected algorithm on click
+            }
+
+            rerunButtonsContainer.appendChild(button);
+        });
+    }
+
+    function exportResults() {
+        // Continue with the export logic if the onclick event is set
+        const currentDate = new Date();
+        const formattedDate = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}_${String(currentDate.getHours()).padStart(2, '0')}-${String(currentDate.getMinutes()).padStart(2, '0')}-${String(currentDate.getSeconds()).padStart(2, '0')}`;
+        const algorithm = document.getElementById('algorithm').innerText || "Unknown";
+        const fileName = `OpenPathCL_${algorithm}_${formattedDate}.html`;
+
+        const mapDIV = document.getElementById('map').outerHTML;
+        const contentDIV = document.getElementById('content').outerHTML;
+        const githubButton = document.querySelector('.github-icon').outerHTML;
+
+        // Capture map data (markers, routes, bounding boxes)
+        const mapData = {
+            startCoords: inputData.start,
+            endCoords: inputData.dest,
+            route: route,
+            boundingBox: inputData.bbox
+        };
+
+        const styles = Array.from(document.styleSheets)
+            .map(styleSheet => {
+                try {
+                    return Array.from(styleSheet.cssRules)
+                        .map(rule => rule.cssText)
+                        .join("\n");
+                } catch (e) {
+                    console.warn("Could not read stylesheet:", e);
+                    return "";
+                }
+            })
+            .join("\n");
+
+        const exportContent = `
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <title>OpenPathCL ${algorithm} Results</title>
+            <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+            <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"><\/script>
+            <style>${styles}</style>
+        </head>
+        <body>
+            ${mapDIV}
+            <div id="sidebar">
+                <h1>OpenPathCL Export</h1>
+                <hr>
+                ${contentDIV}
+                <hr>
+            </div>
+            ${githubButton}
+
+            <script>
+                // Embedded map data
+                const mapData = ${JSON.stringify(mapData)};
+
+                // Initialize Leaflet map in the exported HTML
+                document.addEventListener("DOMContentLoaded", function() {
+                    const map = L.map('map').setView([53.746056, 9.678164], 13);
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                        attribution: 'Map data © OpenStreetMap contributors',
+                    }).addTo(map);
+
+                    // Add start and end markers
+                    L.marker(mapData.startCoords).addTo(map);
+                    L.marker(mapData.endCoords).addTo(map);
+
+                    // Draw the routing line
+                    const routeLine = L.polyline(mapData.route, { color: 'red' }).addTo(map);
+
+                    // Draw the bounding box
+                    const boundingBox = L.polygon(mapData.boundingBox, { color: '#3388ff', weight: 1 }).addTo(map);
+                    map.fitBounds(mapData.boundingBox);
+                });
+
+                // Dynamic overpass link for "See Nodes" button
+                document.getElementById('overpassLink').onclick = function() {
+                    window.open("${overpassLink}", "_blank");
+                };
+            <\/script>
+        </body>
+        </html>
+    `;
+
+        const blob = new Blob([exportContent], { type: "text/html" });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = fileName;
+        link.click();
+
+        URL.revokeObjectURL(link.href);
+    }
+
+    // Initialize the output by loading initial data
     showLoading();
     receiveData();
 </script>
+
 </body>
 </html>

@@ -1,90 +1,15 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h> // For boolean data types
-#include <float.h>  // For DBL_MAX
-#include <math.h>  // for Pi, sin, cos, atan and sqrt
+#include <float.h>  // For FLT_MAX
 #include <curl/curl.h>
 #include <time.h>
 
-#include "common.h"  // Include the common header
+#include "cli_utils.h" // Include parseArguments function
+#include "data_loader.h"  // Include OverpassAPI functions
+#include "graph_utils.h"  // Include Graph functions
 
-#define INF DBL_MAX
-#define EARTH_RADIUS 6371000  // Earth's radius in meters
-
-
-// Function for calculating the distance between two coordinated on earth
-float haversine(float lat1, const float lon1, float lat2, const float lon2) {
-    const float lat_distance = (float) ((lat2 - lat1) * (M_PI / 180.0));
-    const float lon_distance = (float) ((lon2 - lon1) * (M_PI / 180.0));
-
-    lat1 = (float) (lat1 * (M_PI / 180.0));
-    lat2 = (float) (lat2 * (M_PI / 180.0));
-
-    const float a = (float) (sin(lat_distance / 2) * sin(lat_distance / 2) +
-                    sin(lon_distance / 2) * sin(lon_distance / 2) * cos(lat1) * cos(lat2));
-
-    const float c = (float) (2 * atan2(sqrt(a), sqrt(1 - a)));
-
-    return EARTH_RADIUS * c;
-}
-
-// Function to fill the graph with the data from the roads
-void createGraph(Node* nodes, const int nodeCount, const Road* roads, const int roadCount) {
-    // Iterate through each road
-    for (int i = 0; i < roadCount; i++) {
-        const Road road = roads[i];
-
-        // Go through each pair of consecutive nodes in the road
-        for (int j = 0; j < road.nodeCount - 1; j++) {
-            const int64_t nodeId1 = road.nodes[j];
-            const int64_t nodeId2 = road.nodes[j + 1];
-
-            // Find the indexes of nodeId1 and nodeId2 in the nodes array
-            int index1 = -1, index2 = -1;
-            for (int k = 0; k < nodeCount; k++) {
-                if (nodes[k].id == nodeId1) index1 = k;
-                if (nodes[k].id == nodeId2) index2 = k;
-            }
-
-            // If both nodes are found, calculate the distance between them
-            if (index1 != -1 && index2 != -1) {
-                const float distance = haversine(nodes[index1].lat, nodes[index1].lon,
-                                                  nodes[index2].lat, nodes[index2].lon);
-
-                // Add edge from index1 to index2
-                Edge* newEdge1 = malloc(sizeof(Edge));
-                if (newEdge1) {
-                    newEdge1->destination = index2;
-                    newEdge1->weight = distance;
-                    newEdge1->next = nodes[index1].head;
-                    nodes[index1].head = newEdge1;
-                }
-
-                // Add edge from index2 to index1 (for undirected graph)
-                Edge* newEdge2 = malloc(sizeof(Edge));
-                if (newEdge2) {
-                    newEdge2->destination = index1;
-                    newEdge2->weight = distance;
-                    newEdge2->next = nodes[index2].head;
-                    nodes[index2].head = newEdge2;
-                }
-            }
-        }
-    }
-}
-
-void freeNodes(Node* nodes, int nodeCount) {
-    for (int i = 0; i < nodeCount; i++) {
-        Edge* current = nodes[i].head;
-        while (current != NULL) {
-            Edge* temp = current;
-            current = current->next;
-            free(temp); // Free each edge in the linked list
-        }
-        nodes[i].head = NULL; // Set head to NULL after freeing
-    }
-    free(nodes); // Finally, free the array of nodes itself
-}
+#define INF FLT_MAX
 
 // Function to find the vertex with the minimum distance value
 int minDistance(const int vertices, const float dist[], const bool visited_map[]) {
@@ -111,9 +36,7 @@ int dijkstra(
     bool visited_map[vertices]; // visited_map[i] is true if vertex i is included in the shortest path tree
     int prev[vertices];     // prev[i] stores the previous vertex in the path
 
-
-
-    // Initialize all distances as INFINITE and visited_map[] as false
+    // Initialize all distances as INFINITE, visited_map[] as false and previous as -1
     for (int i = 0; i < vertices; i++) {
         dist[i] = INF;
         visited_map[i] = false;
@@ -153,36 +76,34 @@ int dijkstra(
                 prev[v] = u; // Update previous vertex
             }
         }
-
         // Check if the target vertex has been reached
         if (u == dest_index) {
             break; // Stop the loop when the shortest path to the target is found
         }
     }
 
-    // print the results for testing
-    // printDijkstraState(vertices, visited_map, dist, prev);
-
     // After the loop, check if the target vertex has been reached
     if (dist[dest_index] != INF) {
         // Retrieve and print the path
-        PathNode* nodePath = NULL; // Initialize the linked list for the nodePath
         int current = dest_index;
 
-        // Trace back the path from destination to source
+        printf("\t\"route\": [");
         while (current != -1) {
-            appendToNodePath(&nodePath, nodes[current]); // Add the node to the linked list
+            printf("[%f, %f]", nodes[current].lat, nodes[current].lon);
             current = prev[current]; // Move to the previous node
+            if (current != -1) {
+                printf(", ");
+            }
         }
+        printf("],\n");
 
         printf("\t\"routeLength\": \"%.2fm\",\n", dist[dest_index]);
-        printNodePath(nodePath); // Print the nodePath
-        freeNodePath(nodePath);   // Free the allocated memory for the nodePath
         return 0;
     }
     fprintf(stderr, "Target cannot be reached from source\n");
-    return -1;
+    return 1;
 }
+
 
 int main(const int argc, char *argv[]) {
     // get the timestamp of the execution start
@@ -243,7 +164,6 @@ int main(const int argc, char *argv[]) {
 
     // free the not needed data
     free(bbox);
-    free(roads);
 
     // Find the index of the start and dest node
     int start_index = -1;
@@ -267,6 +187,9 @@ int main(const int argc, char *argv[]) {
     // Fill the Graph using the Roads Data
     createGraph(nodes, nodeCount, roads, roadCount);
 
+    // free the not needed data
+    free(roads);
+
     // end the graph time and prints its result
     const clock_t graph_time_end = clock();
     const double graph_time  = ((double) (graph_time_end - graph_time_start)) * 1000 / CLOCKS_PER_SEC;
@@ -274,6 +197,7 @@ int main(const int argc, char *argv[]) {
 
     // Run Dijkstra's algorithm with the source and target IDs
     const clock_t routing_time_start = clock();  // Start the routing time
+
     if (dijkstra(nodeCount, nodes, start_index, dest_index) != 0) {
         freeNodes(nodes, nodeCount);
         return 1;

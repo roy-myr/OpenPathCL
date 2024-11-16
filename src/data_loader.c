@@ -1,67 +1,16 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include "common.h"
-
 #include <string.h>
 #include <curl/curl.h>
 #include <cjson/cJSON.h>
 
-// Function to create a PathNode
-PathNode* createPathNode(const Node data) {
-    PathNode* newNode = malloc(sizeof(PathNode));
-    // check if the allocation was successful
-    if (!newNode) {
-        // Not successful. Return an error.
-        perror("Failed to allocate memory for new path node");
-        exit(EXIT_FAILURE); // Handle memory allocation failure
-    }
-    // Successful. Fill the PathNode
-    newNode->data = data;
-    newNode->next = NULL;
-    return newNode;
-}
+#include "graph_utils.h"  // for Node and Road Struct
 
-// Function to add a Node to the End of the PathNode linked list
-void appendToNodePath(PathNode** head, const Node data) {
-    PathNode* newNode = createPathNode(data);
-    if (*head == NULL) {
-        // List is empty. Set the New Node as the head
-        *head = newNode;
-        return;
-    }
-    PathNode* current = *head;
-    while (current->next != NULL) {
-        if (current->next == NULL) break;
-        current = current->next; // Traverse to the last node
-    }
-    current->next = newNode; // Add the new node at the end
-}
-
-// Function to print the path
-void printNodePath(const PathNode* head) {
-    printf("\t\"route\": [");
-    const PathNode* current = head;
-    while (current != NULL) {
-        printf("[%f, %f]", current->data.lat, current->data.lon);
-        if (current->next != NULL) {
-            printf(", ");
-        }
-        current = current->next;
-    }
-    printf("],\n");
-}
-
-// Function to free the linked list
-void freeNodePath(PathNode* head) {
-    PathNode* current = head;
-    PathNode* nextNode;
-    while (current != NULL) {
-        nextNode = current->next; // Store the next node
-        free(current);            // Free the current node
-        current = nextNode;       // Move to the next node
-    }
-}
-
+// Define a struct to hold the response data
+struct MemoryStruct {
+    char* memory;
+    size_t size;
+};
 
 // Function to extract the Nodes from the JSON Response
 void parseAndStoreJSON(const char* jsonResponse, Node** nodes, int* nodeCount, Road** roads, int* roadCount) {
@@ -75,13 +24,32 @@ void parseAndStoreJSON(const char* jsonResponse, Node** nodes, int* nodeCount, R
     *nodeCount = 0;
     int nodeCapacity = 10;
     *nodes = (Node*)malloc(nodeCapacity * sizeof(Node));
+    if (*nodes == NULL) {
+        perror("Initial memory allocation failed for nodes");
+        cJSON_Delete(root);
+        exit(EXIT_FAILURE);
+    }
 
     *roadCount = 0;
     int roadCapacity = 10;
     *roads = (Road*)malloc(roadCapacity * sizeof(Road));
+    if (*roads == NULL) {
+        perror("Initial memory allocation failed for roads");
+        free(*nodes);
+        cJSON_Delete(root);
+        exit(EXIT_FAILURE);
+    }
 
-    // Iterate through the JSON array of elements
+    // Retrieve and iterate through the JSON array of elements
     const cJSON *elements = cJSON_GetObjectItemCaseSensitive(root, "elements");
+    if (!cJSON_IsArray(elements)) {
+        fprintf(stderr, "\"elements\" is missing or not an array\n");
+        free(*nodes);
+        free(*roads);
+        cJSON_Delete(root);
+        return;
+    }
+
     cJSON *element = NULL;
     cJSON_ArrayForEach(element, elements) {
         const cJSON *type = cJSON_GetObjectItemCaseSensitive(element, "type");
@@ -108,7 +76,9 @@ void parseAndStoreJSON(const char* jsonResponse, Node** nodes, int* nodeCount, R
                     *nodes = (Node*)realloc(*nodes, nodeCapacity * sizeof(Node));
                     if (*nodes == NULL) {
                         perror("Memory reallocation failed for nodes");
-                        exit(EXIT_FAILURE);  // Handle failure
+                        free(*roads);
+                        cJSON_Delete(root);
+                        exit(EXIT_FAILURE);
                     }
                 }
             }
@@ -125,6 +95,13 @@ void parseAndStoreJSON(const char* jsonResponse, Node** nodes, int* nodeCount, R
 
                 // Allocate memory for the node IDs in this road
                 road.nodes = (int64_t*)malloc(road.nodeCount * sizeof(int64_t));
+                if (road.nodes == NULL) {
+                    perror("Memory allocation failed for road nodes");
+                    free(*nodes);
+                    free(*roads);
+                    cJSON_Delete(root);
+                    exit(EXIT_FAILURE);
+                }
 
                 int nodeIndex = 0;
                 const cJSON *nodeId = NULL;
@@ -145,8 +122,11 @@ void parseAndStoreJSON(const char* jsonResponse, Node** nodes, int* nodeCount, R
                     *roads = (Road*)realloc(*roads, roadCapacity * sizeof(Road));
                     if (*roads == NULL) {
                         perror("Memory reallocation failed for roads");
-                        exit(EXIT_FAILURE);  // Handle failure
-                    }               }
+                        free(*nodes);
+                        cJSON_Delete(root);
+                        exit(EXIT_FAILURE);
+                    }
+                }
             }
         }
     }
@@ -158,12 +138,6 @@ void parseAndStoreJSON(const char* jsonResponse, Node** nodes, int* nodeCount, R
     printf("\t\"roadsInBoundingBox\": %d,\n", *roadCount);
 }
 
-
-// Structure to hold response data
-struct MemoryStruct {
-    char* memory;
-    size_t size;
-};
 
 static size_t WriteMemoryCallback(const void* contents, const size_t size, size_t nmemb, void* userp) {
     size_t realSize = size * nmemb;
@@ -182,41 +156,6 @@ static size_t WriteMemoryCallback(const void* contents, const size_t size, size_
     mem->memory[mem->size] = 0;
 
     return realSize;
-}
-
-// Function to parse command-line arguments
-int parseArguments(const int argc, char* argv[], float start[2], float dest[2], float** bbox, int* bbox_size) {
-    // Check for the required number of arguments
-    if (argc < 10 || (argc - 6) % 2 != 1) {
-        fprintf(stderr, "Invalid Arguments\n "
-                        "Usage: start_lat start_lon dest_lat dest_lon bbox_lat1 bbox_lon1 bbox_lat2 bbox_lon2 ...\n");
-        return -1; // Indicate an error
-    }
-
-    // Parse start point
-    start[0] = strtof(argv[1], NULL);  // start latitude
-    start[1] = strtof(argv[2], NULL);  // start longitude
-
-    // Parse destination point
-    dest[0] = strtof(argv[3], NULL);   // destination latitude
-    dest[1] = strtof(argv[4], NULL);   // destination longitude
-
-    // Calculate number of bounding box coordinates
-    *bbox_size = argc - 6;  // Remaining arguments are bbox points
-    *bbox = (float*)malloc(*bbox_size * sizeof(float)); // Dynamically allocate memory for bbox
-
-    // Check for successful memory allocation
-    if (*bbox == NULL) {
-        fprintf(stderr, "Memory allocation failed for bounding box.\n");
-        return -1; // Indicate an error
-    }
-
-    // Parse bounding box coordinates
-    for (int i = 0; i < *bbox_size + 1; ++i) {
-        (*bbox)[i] = strtof(argv[5 + i], NULL);
-    }
-
-    return 0; // Successful parsing
 }
 
 // Function to get the closest node to given coordinates

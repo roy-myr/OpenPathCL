@@ -24,7 +24,7 @@
         }
         #sidebar {
             flex: 0 0 auto; /* 25% of the width */
-            min-width: 450px;
+            width: 450px;
             display: flex;
             flex-direction: column;
             justify-content: flex-start; /* Align content to the top */
@@ -43,6 +43,31 @@
         h2 {
             margin-bottom: 8px;
         }
+        .tooltip-content {
+            visibility: hidden;
+            width: 300px;
+            background-color: rgba(0, 0, 0, 0.95);
+            color: #fff;
+            font-size: 16px;
+            font-weight: normal;
+            text-align: left;
+            border-radius: 5px;
+            padding: 10px;
+            position: absolute;
+            z-index: 1;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+        }
+
+        h2:hover .tooltip-content {
+            visibility: visible;
+            opacity: 1;
+        }
+
         hr {
             width: 99%;
             margin: 0;
@@ -53,7 +78,7 @@
         }
         button {
             width: 140px;
-            margin: 10px 0; /* Add spacing between buttons */
+            margin: 2px 0; /* Add spacing between buttons */
             padding: 10px 15px; /* Padding for the buttons */
             border: none; /* Remove border */
             border-radius: 5px; /* Rounded corners */
@@ -205,28 +230,58 @@
         <button id="clearPoints">Clear Points</button>
         <button id="clearArea">Clear Area</button>
 
-        <h2>Select Algorithm</h2>
+        <h2>Select Algorithm
+            <span style="position: relative; display: inline-block;">
+                <span class="tooltip-content">
+                    <strong>Dijkstra:</strong> Serial route planning algorithm using Dijkstra's algorithm.<br>
+                    <strong>Δ-Stepping:</strong> Serial route planning using the Delta-Stepping algorithm.<br>
+                    <strong>Parallelizable:</strong> Serial Delta-Stepping algorithm using the same data structure as the parallel version.<br>
+                    <strong>Parallel:</strong> Parallel algorithm implemented in OpenCL with a parallelizable Delta-Stepping Algorithm.
+                </span>
+            </span>
+        </h2>
+
+
         <div id="toggleButtons">
-            <button id="btnParallel" class="toggle-button selected">Parallel</button>
-            <button id="btnSerial" class="toggle-button">Serial</button>
+            <button id="btnSerialDijkstra" class="toggle-button selected">Dijkstra</button>
+            <button id="btnSerialDelta" class="toggle-button">&Delta;-Stepping</button>
+            <button id="btnParallelizable" class="toggle-button">Parallelizable</button>
+            <button id="btnParallel" class="toggle-button">Parallel</button>
         </div>
 
         <script>
             // Get the button elements
+            const btnSerialDijkstra = document.getElementById('btnSerialDijkstra');
+            const btnSerialDelta = document.getElementById('btnSerialDelta');
+            const btnParallelizable = document.getElementById('btnParallelizable');
             const btnParallel = document.getElementById('btnParallel');
-            const btnSerial = document.getElementById('btnSerial');
 
-            // Add click event listeners to both buttons
+            // Add click event listeners to the buttons
+            btnSerialDijkstra.addEventListener('click', () => {
+                setSelectedAlgorithm(btnSerialDijkstra);
+            });
+
+            btnSerialDelta.addEventListener('click', () => {
+                setSelectedAlgorithm(btnSerialDelta);
+            });
+
+            btnParallelizable.addEventListener('click', () => {
+                setSelectedAlgorithm(btnParallelizable);
+            });
+
             btnParallel.addEventListener('click', () => {
-                btnParallel.classList.add('selected'); // Add 'selected' class to Parallel
-                btnSerial.classList.remove('selected'); // Remove 'selected' class from Serial
+                setSelectedAlgorithm(btnParallel);
             });
 
-            btnSerial.addEventListener('click', () => {
-                btnSerial.classList.add('selected'); // Add 'selected' class to Serial
-                btnParallel.classList.remove('selected'); // Remove 'selected' class from Parallel
-            });
+            // Function to handle selection of algorithm buttons
+            function setSelectedAlgorithm(selectedButton) {
+                // Remove 'selected' class from all buttons
+                [btnSerialDijkstra, btnSerialDelta, btnParallelizable, btnParallel].forEach(button => button.classList.remove('selected'));
+                // Add 'selected' class to the selected button
+                selectedButton.classList.add('selected');
+            }
         </script>
+
 
     </div>
 
@@ -401,10 +456,19 @@
         }
 
         // Determine the selected algorithm
-        const selectedAlgorithm = btnParallel.classList.contains('selected') ? 'parallel' : 'serial';
+        let selectedAlgorithm;
+        if (btnSerialDijkstra.classList.contains('selected')) {
+            selectedAlgorithm = 'serial_dijkstra';
+        } else if (btnSerialDelta.classList.contains('selected')) {
+            selectedAlgorithm = 'serial_delta';
+        } else if (btnParallelizable.classList.contains('selected')) {
+            selectedAlgorithm = 'parallelizable';
+        } else if (btnParallel.classList.contains('selected')) {
+            selectedAlgorithm = 'parallel';
+        }
 
-        var data = {
-            algorithm: selectedAlgorithm,  // Add the selected algorithm here
+        const data = {
+            algorithm: selectedAlgorithm,  // Add the selected algorithm
             bbox: drawnShape instanceof L.Rectangle
                 ? [
                     [drawnShape.getBounds().getNorthWest().lat, drawnShape.getBounds().getNorthWest().lng],
@@ -414,18 +478,15 @@
                 ]
                 : drawnShape.getLatLngs()[0].flatMap(function (point) {
                     return [[point.lat, point.lng]];
-                }), // For polygon, flatten lat/lng array
+                }),
             start: [startPointMarker.getLatLng().lat, startPointMarker.getLatLng().lng],
             dest: [endPointMarker.getLatLng().lat, endPointMarker.getLatLng().lng]
         };
 
-        // Log the data
         console.log(data);
 
-        // Store data in local storage
         localStorage.setItem('inputData', JSON.stringify(data));
 
-        // POST data to backend
         fetch('/submit', {
             method: 'GET'
         })
@@ -433,16 +494,17 @@
                 if (!response.ok) {
                     throw new Error('Network response was not ok');
                 }
-                return response.text(); // Get the HTML response
+                return response.text();
             })
             .then(html => {
-                // Replace the entire document content with the new HTML
                 document.open();
                 document.write(html);
                 document.close();
             })
             .catch((error) => console.error('Error:', error));
     });
+
+
 
     // Function to clear the area (remove drawn shapes and markers)
     // Function to clear only the drawn shape (without removing start/end markers)

@@ -3,6 +3,9 @@ project(OpenPathCL C)
 
 set(CMAKE_C_STANDARD 11)
 
+# Include the OpenCL headers from Homebrew
+include_directories("/usr/local/opt/opencl-headers/include")
+
 # Find OpenCL package and include the directories
 find_package(OpenCL REQUIRED)
 include_directories(${OpenCL_INCLUDE_DIRS})
@@ -14,41 +17,112 @@ include_directories(${CURL_INCLUDE_DIRS})
 # Find the cJSON library and include directories
 find_package(cjson REQUIRED)
 
+# ------ Open CL Check ------
+add_executable(OpenCL_check
+        src/check_opencl.c)
 
-# ------ Serial Version --------
+# Link OpenCL to the parallel version
+target_link_libraries(OpenCL_check ${OpenCL_LIBRARIES})
 
-# Add the serial version executable
-add_executable(OpenPathCL_serial
-        src/main_serial.c
-        src/common.c
-        src/common.h)
+# ------ Serial Dijkstra Version ------
 
-# Link CURL to the serial version
-target_link_libraries(OpenPathCL_serial ${CURL_LIBRARIES})
+# Add the serial Dijkstra version executable
+add_executable(OpenPathCL_serial_dijkstra
+        src/main_serial_dijkstra.c
+        src/cli_utils.h
+        src/cli_utils.c
+        src/graph_utils.h
+        src/graph_utils.c
+        src/data_loader.h
+        src/data_loader.c
+        src/haversine.h
+        src/haversine.c
+        src/bucket_utils.h
+        src/bucket_utils.c)
 
-# Add cJSON to the serial version
-target_link_libraries(OpenPathCL_serial cjson)
+# Link CURL to the serial Dijkstra version
+target_link_libraries(OpenPathCL_serial_dijkstra ${CURL_LIBRARIES})
 
+# Add cJSON to the serial Dijkstra version
+target_link_libraries(OpenPathCL_serial_dijkstra cjson)
 
-# ------ Parallel Version --------
+# ------ Serial Delta Version ------
+
+# Add the serial delta stepping version executable
+add_executable(OpenPathCL_serial_delta
+        src/main_serial_delta.c
+        src/cli_utils.h
+        src/cli_utils.c
+        src/graph_utils.h
+        src/graph_utils.c
+        src/data_loader.h
+        src/data_loader.c
+        src/haversine.h
+        src/haversine.c
+        src/bucket_utils.h
+        src/bucket_utils.c)
+
+# Link CURL to the serial delta stepping version
+target_link_libraries(OpenPathCL_serial_delta ${CURL_LIBRARIES})
+
+# Add cJSON to the serial delta stepping version
+target_link_libraries(OpenPathCL_serial_delta cjson)
+
+# ------ Parallelizable Version ------
+
+# Add the parallelizable version executable
+add_executable(OpenPathCL_parallelizable
+        src/main_parallelizable.c
+        src/cli_utils.h
+        src/cli_utils.c
+        src/graph_utils.h
+        src/graph_utils.c
+        src/data_loader.h
+        src/data_loader.c
+        src/haversine.h
+        src/haversine.c
+        src/bucket_utils.h
+        src/bucket_utils.c
+        src/parallel_utils.h
+        src/parallel_utils.c)
+
+# Link CURL to the parallelizable version
+target_link_libraries(OpenPathCL_parallelizable ${CURL_LIBRARIES})
+
+# Add cJSON to the parallelizable version
+target_link_libraries(OpenPathCL_parallelizable cjson)
+
+# Link OpenCL to the parallelizable version
+target_link_libraries(OpenPathCL_parallelizable ${OpenCL_LIBRARIES})
+
+# ------ Parallel Version ------
 
 # Add the parallel version executable
 add_executable(OpenPathCL_parallel
         src/main_parallel.c
-        src/common.c
-        src/common.h)
+        src/cli_utils.h
+        src/cli_utils.c
+        src/graph_utils.h
+        src/graph_utils.c
+        src/data_loader.h
+        src/data_loader.c
+        src/haversine.h
+        src/haversine.c
+        src/bucket_utils.h
+        src/bucket_utils.c
+        src/parallel_utils.h
+        src/parallel_utils.c)
 
 # Link CURL to the parallel version
 target_link_libraries(OpenPathCL_parallel ${CURL_LIBRARIES})
 
+# Add cJSON to the parallel version
+target_link_libraries(OpenPathCL_parallel cjson)
+
 # Link OpenCL to the parallel version
 target_link_libraries(OpenPathCL_parallel ${OpenCL_LIBRARIES})
 
-# Add cJSON to the parallel version
-target_link_libraries(OpenPathCL_serial cjson)
-
-
-# ------ Webserver --------
+# ------ Webserver ------
 
 # Add the webserver executable
 add_executable(OpenPathCL_webserver
