@@ -1,4 +1,4 @@
-# OpenPathCL
+# ![OpenPathCL icon](./src/templates/images/favicon.png) OpenPathCL 
 
 Route planing based on Open Street Map data. Parallelized with OpenCL.
 
